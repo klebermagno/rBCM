@@ -23,14 +23,20 @@ parallelized only by using the python multiprocessing library.
 
 ## Installation
 
-To install rBCM, run `sudo python setup.py install -i` inside the rBCM top-level directory.
-To clean up all the build files generated, call `python setup.py clean`.
-To run the test suite, navigate to the tests directory cand call `py.test`.
+To install rBCM, run `sudo python setup.py install -i` inside the rBCM top-
+level directory. To clean up all the build files generated, call `python
+setup.py clean`.
 
 This package requires:
 * Numpy
 * Cython
 * scikit-learn
+
+To run the test suite, navigate to the tests directory cand call `py.test`.
+
+The test suite builds plots in static html files that are placed in the
+`tests/visuals/` directory and requires the bokeh package for this. If you
+don't use the test suite you don't need bokeh though.
 
 ## Why use an rBCM?
 
