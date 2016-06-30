@@ -16,7 +16,7 @@ def setup_package():
         author="Lucas J. Kolstad",
         author_email="lucaskolstad@gmail.com",
         version="0.0.1",
-        license="MIT",
+        license="See LICENSE file.",
         packages=find_packages(),
         ext_modules=cythonize(cython_sources),
         include_dirs=[np.get_include()]

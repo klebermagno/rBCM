@@ -1,1 +1,1 @@
-__all__ = ["rbcm", "weighting"]
+from rBCM.rbcm import rBCM
