@@ -21,6 +21,17 @@ In concept, a robust Bayesian Committee Machine could be run in parallel in a
 distributed environment on huge datasets. Though this implementation is
 parallelized only by using the python multiprocessing library.
 
+## Installation
+
+To install rBCM, run `sudo python setup.py install -i` inside the rBCM top-level directory.
+To clean up all the build files generated, call `python setup.py clean`.
+To run the test suite, navigate to the tests directory cand call `py.test`.
+
+This package requires:
+* Numpy
+* Cython
+* scikit-learn
+
 ## Why use an rBCM?
 
 rBCM models offer the attractions of GPR modeling without as disabling of
@@ -61,21 +72,21 @@ of GPR with better computational performance.
 ## Choices you need to make when using rBCM
 
 The following are different considerations you should be aware of when using
-this package. Though you may easily use the package without looking at any of these
-things, here is an example:
+this package. Though you may easily use the package without looking at any of
+these things, here is an example:
 
 ```python
 import numpy as np
-from rBCM import RobustBayesianCommitteeMachineRegressor as rbcm
-machine = rbcm()
+from rBCM.rbcm import RobustBayesianCommitteeMachineRegressor as RBCM
+machine = RBCM()
 
 def func(X):
     return np.sin(X) + X**2
 
-X = np.arange(10000, dtype=np.float64) / 100
+X = np.arange(10000, dtype=np.float64).reshape(-1, 1) / 100
 y = func(X)
 machine.fit(X, y)
-predictions = rbcm.predict(X)
+predictions = machine.predict(X)
 ```
 
 ### Kernel
@@ -83,8 +94,9 @@ predictions = rbcm.predict(X)
 Currently, an rBCM is passed a single kernel and that is used as the kernel
 for all the experts. This must be one of the kernel subclasses from the
 `scikit-learn.gaussian_process.kernels` module. This is a choice of prior and
-you may pass any you like, but know that each expert's parameters get optimized
-independently of one another to only the data partitioned to that expert.
+you may pass any you like, but know that each expert's parameters get
+optimized independently of one another to only the data partitioned to that
+expert.
 
 In the prediction step, you can pass a `batch_size` parameter to instruct the
 experts to predict at only `batch_size` data locations in parallel at once.
@@ -118,12 +130,12 @@ sized chunks as there will be experts. This may be desirable for two reasons
 
 #### Clustered
 
-This approach employs the Birch clustering algorithm implemented in scikit-learn
-to cluster the dataset into as many clusters as there will be experts in
+This approach employs the Birch clustering algorithm implemented in scikit-
+learn to cluster the dataset into as many clusters as there will be experts in
 the rBCM. The virtue of this is that each expert will have, in the region in
 which it is a local expert (now the 'expert' nomenclature makes more sense),
 all the possible data for that location. It will not have some subsampling of
-the data in that region given by random chance, it will have all of it. 
+the data in that region given by random chance, it will have all of it.
 
 This should lead to the weighting procedure finding one expert at each
 prediction location which has very high certainty, while all the other models
@@ -168,16 +180,6 @@ This term is then used as a scaling factor when computing the merged
 prediction from all the expert's predictions as well as when computing the
 variance of the overall rBCM's predictions.
 
-## Installation
-
-To install rBCM, run `sudo python setup.py install` inside the rBCM top-level directory.
-To clean up all the build files generated, call `python setup.py clean`.
-To run the test suite, navigate to the tests directory cand call `py.test`.
-
-This package requires:
-* Numpy
-* Cython
-* scikit-learn
 
 ## Relevant References
     

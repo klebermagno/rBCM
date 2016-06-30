@@ -3,6 +3,7 @@
 **.pyc
 **.so
 **.pyd
+**.ipynb_checkpoints/
 
 dist/
 build/

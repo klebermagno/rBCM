@@ -7,6 +7,7 @@
 import time 
 
 import cython
+import numpy as np
 cimport cython
 cimport numpy as np
 
@@ -98,7 +99,7 @@ cdef _combine(np.ndarray[np.float64_t, ndim=3] predictions,
     # Compute Eq. 21
     # TODO: there is probably an np.einsum implementation possible,
     # maybe we don't need cython
-    preds = np.zeros((num_preds, predictions.shape[1]))
+    preds = np.zeros((predictions.shape[0], predictions.shape[1]))
     for i in range(predictions.shape[0]):
         for j in range(predictions.shape[1]):
             summation = 0
