@@ -9,19 +9,17 @@ The package is built on top of and found much inspiration from the
 `GaussianProcessRegressor` class found in scikit-learn, the interface is close
 to that of the GPR class.
 
-See the following paper for more information on the statistics of this
-modeling approach. The description of the rBCM within was the foundation for
-this implementation. There is also interesting comparison of rBCM with the
-Bayesian Committee Machine and General Product of Experts models; how they are
-closely related and how their performance differs statistically and
-computationally.
+See the paper below for more information on the statistics of this modeling
+approach. The description of the rBCM within was the foundation for this
+implementation. There is also interesting comparison of rBCM with the Bayesian
+Committee Machine and General Product of Experts models; how they are closely
+related and how their performance differs statistically and computationally.
 
-* [jmlr.org/proceedings/papers/v37/deisenroth15.pdf]
+* [Distributed Gaussian Processes](jmlr.org/proceedings/papers/v37/deisenroth15.pdf)
 
-In concept, a robust Bayesian Committee Machine could be run massively in
-parallel in a distributed environment on huge datasets. Though this
-implementation is parallelized only by using the python multiprocessing
-library.
+In concept, a robust Bayesian Committee Machine could be run in parallel in a
+distributed environment on huge datasets. Though this implementation is
+parallelized only by using the python multiprocessing library.
 
 ## Why use an rBCM?
 
@@ -148,7 +146,7 @@ location for each `expert_k`. Choosing what metric to use as beta is
 subjective; it can be any measure of uncertainty and doesn't even need to be a
 good one, but the following paper makes some suggestions in section 2.3:
 
-* [http://arxiv.org/pdf/1410.7827v2.pdf]
+* [Generalized Product of Experts for Automatic and Principled Fusion of Gaussian Process Predictions](http://arxiv.org/pdf/1410.7827v2.pdf)
 
 This package currently only supports one choice of beta metric for now, though
 adding more is high on the todo list. The beta is taken to be half the
@@ -183,7 +181,5 @@ This package requires:
 
 ## Relevant References
     
-    Bayesian Committee Machine background information
-* [http://www.dbs.ifi.lmu.de/~tresp/papers/bcm6.pdf]
-    Other alternative ways to scale gaussian process regression
-* [http://www.dbs.ifi.lmu.de/~tresp/papers/nips02_approxgp.pdf]
+* [Bayesian Committee Machine background information](http://www.dbs.ifi.lmu.de/~tresp/papers/bcm6.pdf)
+* [Other alternative ways to scale gaussian process regression](http://www.dbs.ifi.lmu.de/~tresp/papers/nips02_approxgp.pdf)

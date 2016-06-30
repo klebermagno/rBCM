@@ -4,7 +4,6 @@
 #
 # License: See LICENSE file
 
-import random
 import multiprocessing as mp
 import numpy as np
 
@@ -15,7 +14,7 @@ from sklearn.cluster import Birch
 from sklearn import gaussian_process as GPR
 from sklearn.utils.validation import check_X_y, check_array
 
-from .weighting import differential_entropy_weighting
+from weighting import differential_entropy_weighting
 
 
 class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
@@ -44,19 +43,12 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         clustering to assign data in local groups to experts
 
     max_points: integer (default: None)
-        A cap on the total data the RBCM will look at when fit,
-        best used for development to test on a subset of a large dataset
-        quickly
-
-    Attributes
-    ----------
-
+        A cap on the total data the RBCM will look at when fit, best used for
+        development to test on a subset of a large dataset quickly
     """
     def __init__(self, kernel=None, points_per_expert=750, locality=False, max_points=None):
         self.locality = locality
-        self.max_points = max_points
         self.kernel = kernel
-        self.prior_std = kernel(kernel.diag(np.arange(1)))[0]
         self.points_per_expert = points_per_expert
 
     def fit(self, X, y):
@@ -79,19 +71,9 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
             self.kernel = C(1.0, constant_value_bounds="fixed") \
                 * RBF(1.0, length_scale_bounds="fixed")
 
-        X, y = check_X_y(X, y, multi_output=True, y_numeric=True)
+        self.prior_std = self.kernel(self.kernel.diag(np.arange(1)))[0]
 
-        # Subsample down to max_points if parameter was set
-        self.num_samples = X.shape[0]
-        if self.max_points is not None:
-            if self.max_points < self.num_samples:
-                samples = random.sample(range(X.shape[0]), self.max_points)
-                self.X = X[samples, :]
-                self.y = y[samples, :]
-                self.num_samples = self.max_points
-            else:
-                self.X = X
-                self.y = y
+        X, y = check_X_y(X, y, multi_output=True, y_numeric=True)
 
         # We scale all the data as one, and do no additional scaling in
         # each individual expert
@@ -240,8 +222,6 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
             for label in unique_labels:
                 sample_sets.append([i for i in indices if labels[i] == label])
         else:
-            if seed is not None:
-                np.random.seed(seed)
             np.random.shuffle(indices)
 
             # Renaming just for convenience

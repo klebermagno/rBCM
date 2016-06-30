@@ -20,13 +20,13 @@ def differential_entropy_weighting(predictions, sigma, prior_std):
         posterior's variance at the location of the prediction.
 
     See 'jmlr.org/proceedings/papers/v37/deisenroth15.pdf' page 5 for a
-    description of this weighting in the context of an rBCM which employs this
-    weighting.
+    description of this weighting in the context of an rBCM.
 
     Parameters:
     ----------
     predictions : array, shape = (n_locations, y_num_columns, num_experts)
         The values predicted by each expert
+
     sigma : array, shape = (n_locations, num_experts)
         The uncertainty of each expert at each location
 
@@ -41,15 +41,12 @@ def differential_entropy_weighting(predictions, sigma, prior_std):
     rbcm_var : array, shape = (n_locations, )
         Variance of predictive distribution at query points
     """
-    cdef np.ndarray[np.float64_t, ndim=2] log_var, inv_var, beta, beta_sums
-    cdef np.ndarray[np.float64_t, ndim=2] preds, left_term, right_term
-
     var = np.power(sigma, 2)
     log_var = np.log(var)
     inv_var = 1 / var
 
-    cdef double prior_var = np.power(prior_std, 2)
-    cdef double log_prior_var = np.log(prior_var)
+    prior_var = np.power(prior_std, 2)
+    log_prior_var = np.log(prior_var)
 
     # Compute beta weights, page 5 right hand column
     beta = np.zeros((sigma.shape[0], sigma.shape[1]))
@@ -71,30 +68,34 @@ cdef _combine(np.ndarray[np.float64_t, ndim=3] predictions,
     -----------
     predictions : array-like, shape = (n_locations, n_features, n_experts)
         Values predicted by some sklearn predictor that offers var as well
+
     var : array-like, shape = (n_locations, n_experts)
         Variances corresponding to the predictions
+
     Returns
     -------
     predictions : array, shape = (n_locations, n_features)
 
     rbcm_var : array, shape = (n_locations)
     """
+    # declaring loop variables
     cdef int i, j, k
     cdef double summation
+
     cdef np.ndarray[np.float64_t, ndim=2] inv_var = 1 / var
     cdef double inv_prior_var = 1 / prior_var
 
-    # Compute Eq. 22, page 5 left hand column
-    beta_sums = np.zeros((num_preds, 1))
-    left_term = np.zeros((num_preds, 1))
-    right_term = np.zeros((num_preds, 1))
-    for j in range(num_preds):
+    # Compute Eq. 22
+    beta_sums = np.zeros((predictions.shape[0], 1))
+    left_term = np.zeros((predictions.shape[0], 1))
+    right_term = np.zeros((predictions.shape[0], 1))
+    for j in range(predictions.shape[0]):
         left_term[j, 0] = np.sum(beta[j, :] * inv_var[j, :])
         beta_sums[j, 0] = np.sum(beta[j, :])
         right_term[j, 0] = inv_prior_var * (1 - beta_sums[j])
     rbcm_inv_var = left_term + right_term
 
-    # Compute Eq. 21, page 5 left hand column
+    # Compute Eq. 21
     # TODO: there is probably an np.einsum implementation possible,
     # maybe we don't need cython
     preds = np.zeros((num_preds, predictions.shape[1]))
