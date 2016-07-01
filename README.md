@@ -32,11 +32,11 @@ This package requires:
 * Cython
 * scikit-learn
 
-To run the test suite, navigate to the tests directory cand call `py.test`.
+To run the test suite, navigate to the tests directory and call `nose2`.
 
-The test suite builds plots in static html files that are placed in the
-`tests/visuals/` directory and requires the bokeh package for this. If you
-don't use the test suite you don't need bokeh though.
+The test suite builds plots in static html files as visual tests that are
+placed in the `tests/visuals/` directory and requires the bokeh package for
+this. If you don't use the test suite you don't need bokeh though.
 
 ## Why use an rBCM?
 

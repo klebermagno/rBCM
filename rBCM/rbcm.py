@@ -6,10 +6,9 @@
 
 import multiprocessing as mp
 import numpy as np
-from itertools import imap
 
 from sklearn.base import BaseEstimator, RegressorMixin
-from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C, WhiteKernel
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import Birch
 from sklearn.gaussian_process.gpr import GaussianProcessRegressor as GPR
@@ -34,10 +33,11 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         the alpha=1e-10 default from gpr is set to 0 implicitly here to
         compensate.
 
-    points_per_expert : integer (default: 750)
-        The maximum number of points to assign to each expert. Smaller
-        causes there to be more experts (more parallelism), but each has
-        fewer data points to train on and accuracy may degrade.
+    points_per_expert : integer (default: None)
+        The maximum number of points to assign to each expert. Smaller causes
+        there to be more experts (more parallelism), but each has fewer data
+        points to train on and accuracy may degrade. The default None permits
+        the RBCM implementation to decide however it wants.
 
     locality : boolean (default : False)
         False to randomly assign data to experts. True to use Birch
@@ -63,11 +63,12 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         The individual sub-models fit to partitions of the data
 
     self.X : array, shape = (n_samples, n_features)
-        The data that is to be fit to self.y
+        The data that is to be fit to self.y in a scaled form
+
     self.y : array, shape = (n_samples, n_output_dims)
         The data that is being fit by self.X
     """
-    def __init__(self, kernel=None, points_per_expert=750, locality=False, max_points=None):
+    def __init__(self, kernel=None, points_per_expert=None, locality=False, max_points=None):
         self.locality = locality
         self.kernel = kernel
         self.points_per_expert = points_per_expert
@@ -89,17 +90,17 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         self : returns an instance of self.
         """
         if self.kernel is None:
-            self.kernel = C(1.0) * RBF(1.0)
+            self.prior_std = 1
+        else:
+            self.prior_std = self.kernel(self.kernel.diag(np.arange(1)))[0]
         self.num_samples = X.shape[0]
-        self.prior_std = self.kernel(self.kernel.diag(np.arange(1)))[0]
 
         X, y = check_X_y(X, y, multi_output=True, y_numeric=True)
 
         # We scale all the data as one, not individually
         self.scaler = StandardScaler()
         self.X = self.scaler.fit_transform(X)
-        y_mean = np.mean(y, axis=0)
-        self.y = y - y_mean
+        self.y = y
 
         # Partition the indices of the data into sample_sets
         sample_sets = self._generate_partitioned_indices()
@@ -107,16 +108,18 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         # Generate iterable list of arguments to map out to procs
         args_iter = []
         for samples in sample_sets:
-            args_iter.append((self.kernel, samples, self.X, self.y))
+            args_iter.append([self.kernel, samples, self.X, self.y])
 
         # Actually do the parallel fitting on each partition now
-        pool = mp.Pool()
-        experts = imap(_worker_fit_wrapper, args_iter)
-
         self.experts = []
-        for expert in experts:
-            self.experts.append(expert)
-        pool.close()
+        if len(args_iter) != 1:
+            pool = mp.Pool()
+            experts = pool.imap(_worker_fit_wrapper, args_iter)
+            for i in range(len(sample_sets)):
+                self.experts.append(experts.next())
+            pool.close()
+        else:
+            self.experts.append(_worker_fit_wrapper(args_iter[0]))
         return self
 
     def predict(self, X, return_var=False, batch_size=-1, in_parallel=False):
@@ -126,6 +129,7 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         ----------
         X : array, shape = (n_locations, n_features)
             Query points where the rBCM is evaluated
+
         batch_size : integer
             indicating a batch_size to predict at once, this limits memory
             consumption when predicting on large X. The default -1 means no
@@ -133,8 +137,9 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
 
         in_parallel: boolean
             Whether to use a parallel implementation or not to predict at each
-            location in X. If only predicting a single point, this arg is
-            ignored. For small X, consider setting false.
+            location in X. If only predicting a single point or if predicting
+            with only one expert, this arg is ignored. For small X, consider
+            setting false.
 
         Returns:
         ----------
@@ -146,27 +151,28 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
             Only returned if return_var is True.
         """
         X = check_array(X)
+        X = self.scaler.transform(X)
         num_experts = len(self.experts)
+
+        if num_experts == 1:
+            in_parallel = False
 
         # Bypass all the slow stuff if we are just making a point prediction
         if X.shape[0] == 1:
-            scaled_X = self.scaler.transform(X)
             for i in range(num_experts):
-                predictions, sigma = self.experts[i].predict(scaled_X)
+                predictions, sigma = self.experts[i].predict(X)
 
         # If not making point prediction we do all the large scale work though
         else:
-            X = self.scaler.transform(X)
-
-            pool = mp.Pool()
-
             sigma = np.zeros((X.shape[0], num_experts))
             predictions = np.zeros((X.shape[0], self.y.shape[1], num_experts))
-
-            batch_counter = 1
             args_iter = []
+
             if batch_size == -1:
                 batch_size = X.shape[0] * 2
+
+            if in_parallel:
+                pool = mp.Pool()
 
             # Batch the data and predict
             for i in range(0, X.shape[0], batch_size):
@@ -176,12 +182,12 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
                 # Generate iterable list of arguments to map out to procs
                 # TODO: Could probably be passing a lot less around between procs
                 if len(args_iter) == 0:
-                    for expert in self.experts:
-                        args_iter.append([expert, batch, self.y.shape[1]])
+                    for i in range(num_experts):
+                        args_iter.append([self.experts[i], batch, self.y.shape[1]])
 
-                # We only change the batch arg each loop, leave experts and y.shape alone
+                # We only change the batch arg each loop
                 if len(args_iter) != 0:
-                    for j in range(len(self.experts)):
+                    for j in range(num_experts):
                         args_iter[j][1] = batch
 
                 # Using a simple chunk size policy for now
@@ -189,9 +195,10 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
                 if chunkersize <= 0:
                     chunkersize = 1
 
-                # Map out the heavy computation
                 if in_parallel:
                     results = pool.imap(_worker_predict_wrapper, args_iter, chunksize=chunkersize)
+                elif num_experts == 1:
+                    predictions, sigma = _worker_predict_wrapper(args_iter[0])
                 else:
                     results = map(_worker_predict_wrapper, args_iter)
 
@@ -199,12 +206,16 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
                 for j in range(num_experts):
                     if in_parallel:
                         predictions[batch_range, :, j], sigma[batch_range, j] = results.next()
-                    else:
+                    elif num_experts != 1:
                         predictions[batch_range, :, j], sigma[batch_range, j] = results[j]
 
-                batch_counter += 1
-            pool.close()
-        preds, var = differential_entropy_weighting(predictions, sigma, self.prior_std)
+            if in_parallel:
+                pool.close()
+        if num_experts != 1:
+            preds, var = differential_entropy_weighting(predictions, sigma, self.prior_std)
+        else:
+            preds = predictions
+            var = np.power(sigma, 2)
         if return_var:
             return preds, var
         else:
@@ -213,13 +224,15 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
     def _generate_partitioned_indices(self):
         """Return a list of lists each containing a partition of the indices
         of the data to be fit.
-
-        Each inner list contains at most self.points_per_expert indices
-        partitioned from the set [0, num_samples-1].
-
-        If self.locality was set True, clusters the data to be fit and
-        partitions each expert their own cluster.
         """
+        # We get to set our own points_per_expert policy if not set
+        if self.points_per_expert is None:
+            # Only have multiple experts if data set is not trivially small
+            if self.num_samples > 1024:
+                self.points_per_expert = 1024
+            else:
+                self.points_per_expert = self.num_samples
+
         sample_sets = []
         indices = np.arange(self.num_samples)
         if self.locality:
@@ -236,21 +249,20 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         else:
             np.random.shuffle(indices)
 
-            # Renaming just for convenience
-            cap = indices.shape[0]
+            # Renaming just for short names
+            cap = self.num_samples
             exp = self.points_per_expert
 
             for i in range(0, cap, exp):
                 if (i + exp) >= cap:
                     exp = cap - i
-                samples = indices[i:i + exp]
-                sample_sets.append(samples)
+                sample_sets.append(indices[i:i + exp])
         return sample_sets
 
 
 def _worker_fit(kernel, sample_indices, X, y):
     """This contains the parallel workload used in the fitting of the rbcm"""
-    gpr = GPR(kernel, normalize_y=False, copy_X_train=False, n_restarts_optimizer=3)
+    gpr = GPR(kernel, normalize_y=False, n_restarts_optimizer=5)
     gpr.fit(X[sample_indices, :], y[sample_indices, :])
     return gpr
 

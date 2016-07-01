@@ -33,7 +33,7 @@ def cleanup_build():
     subprocess.Popen('rm -rf dist', shell=True, executable="bash")
     subprocess.Popen('rm -rf rBCM.egg-info', shell=True, executable="bash")
     subprocess.Popen('find . -name "__pycache__" -type d -delete', shell=True, executable="bash")
-    subprocess.Popen('find . -name "tests/visuals/*" -type d -delete', shell=True, executable="bash")
+    subprocess.Popen('rm -rf ./tests/visuals/*', shell=True, executable="bash")
 
     # do the normal cleaning too
     sys.argv[1] = "clean"
