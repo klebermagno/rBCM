@@ -8,7 +8,6 @@ import multiprocessing as mp
 import numpy as np
 
 from sklearn.base import BaseEstimator, RegressorMixin
-from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C, WhiteKernel
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import Birch
 from sklearn.gaussian_process.gpr import GaussianProcessRegressor as GPR

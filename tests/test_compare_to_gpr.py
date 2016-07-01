@@ -8,7 +8,6 @@ from __future__ import division
 import numpy as np
 
 from bokeh.plotting import figure, output_file, save
-from bokeh.layouts import column
 
 from sklearn.utils.estimator_checks import check_estimator
 from sklearn.gaussian_process.gpr import GaussianProcessRegressor as GPR
@@ -42,7 +41,7 @@ def test_visual_comparison():
 
     gpr_fit1, sigma = get_gpr_model_predictions(X1, y1, X_1)
     rbcm_fit1, sigma = get_rbcm_model_predictions(X1, y1, X_1)
-    create_comparison_plots("small", X1.ravel(), y1.ravel(), X_1.ravel(),
+    create_comparison_plots("linear_noisy", X1.ravel(), y1.ravel(), X_1.ravel(),
                             gpr_fit1.ravel(), X_1.ravel(), rbcm_fit1.ravel())
 
 

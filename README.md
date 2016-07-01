@@ -6,8 +6,7 @@ Process regression (GPR) while still providing a good approximation to a full GP
 model.
 
 The package is built on top of and found much inspiration from the
-`GaussianProcessRegressor` class found in scikit-learn, the interface is close
-to that of the GPR class.
+gaussian_process package found in scikit-learn.
 
 See the paper below for more information on the statistics of this modeling
 approach. The description of the rBCM within was the foundation for this
@@ -75,7 +74,7 @@ This package considers a 'good' prediction as being close to the prediction of
 a full GPR model fit to the entire dataset. The goal is to mirror the results
 of GPR with better computational performance.
 
-## Choices you need to make when using rBCM
+## Usage
 
 The following are different considerations you should be aware of when using
 this package. Though you may easily use the package without looking at any of
@@ -104,17 +103,14 @@ you may pass any you like, but know that each expert's parameters get
 optimized independently of one another to only the data partitioned to that
 expert.
 
+### Batching
+
 In the prediction step, you can pass a `batch_size` parameter to instruct the
 experts to predict at only `batch_size` data locations in parallel at once.
 This can be used to limit maximum system memory consumption. Prediction with
-GPR models is known to be a memory hog, predicting with 100 of them isn't
-great either. Though the default of `batch_size=-1` sets there to be no
-batching by default and you may not need it depending on how many predictions
-you request at once.
-
-An rBCM has two areas in which there is significant choice in implementation.
-The first is in deciding how to partition the data among the experts. The
-second is in deciding how to weight the predictions of the experts.
+GPR models is known to be a memory hog. Though the default of `batch_size=-1`
+sets there to be no batching by default and you may not need it depending on
+how many predictions you request at once.
 
 ### Partitioning
 
@@ -160,9 +156,8 @@ experts.
 
 The exact weighting formula is given in the paper at the top of this readme on
 page 5 and involves first computing a weight `beta_k` for each prediction
-location for each `expert_k`. Choosing what metric to use as beta is
-subjective; it can be any measure of uncertainty and doesn't even need to be a
-good one, but the following paper makes some suggestions in section 2.3:
+location for each `expert_k`. It's not obvious what metric is best to use, but
+the following paper makes some suggestions in section 2.3:
 
 * [Generalized Product of Experts for Automatic and Principled Fusion of Gaussian Process Predictions](http://arxiv.org/pdf/1410.7827v2.pdf)
 
@@ -170,9 +165,12 @@ This package currently only supports one choice of beta metric for now, though
 adding more is high on the todo list. The beta is taken to be half the
 difference in the log of the variance of the posterior from the log of the
 variance of the prior. This is also known as the difference in differential
-entropy between the posterior and prior. This has been found to well identify
-whether a GPR model generalizes accurately at the prediction location from its
-training.
+entropy between the posterior and prior.
+
+This has been chosen because it indicates how well the GPR model generalizes
+accurately at the prediction location from its training. If the variance of
+the posterior is meaningfully smaller than that of the prior, then it likely
+has relevant data and we upweight that prediction.
 
 In pseudocode, for a single prediction location `x` and a single `expert_k` the value
 of `beta_k` is given as:
@@ -180,8 +178,8 @@ of `beta_k` is given as:
 ```python
 beta_k = (0.5) * (log(prior_variance) - log(posterior_variance(expert_k, x)))
 ```
-Note that the prior_variance is a single constant value, while
-posterior_variance(expert_k, x) depends on the specific expert and location.
+Note that the `prior_variance` is a single constant value, while
+`posterior_variance(expert_k, x)` depends on the specific expert and location.
 This term is then used as a scaling factor when computing the merged
 prediction from all the expert's predictions as well as when computing the
 variance of the overall rBCM's predictions.
