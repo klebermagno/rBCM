@@ -16,6 +16,11 @@ from sklearn.utils.validation import check_X_y, check_array
 from weighting import differential_entropy_weighting
 
 
+# Important implementation parameters
+_MIN_POINTS_FOR_RBCM = 2048  # force a full GPR for data with small n
+_DEFAULT_POINTS_PER_EXPERT = 512  # If not degenerate, but passed no ppe
+
+
 class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
     """Robust Bayesian Committee Machine Regression (rBCM).
 
@@ -46,10 +51,26 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         A cap on the total data the RBCM will look at when fit, best used for
         development to test on a subset of a large dataset quickly
 
+    n_restarts_optimizer : non-negative integer (default : 0)
+        The number of restarts each GPR gets on it's optimization procedure,
+        the restarts pull parameters as described in the module
+        sklearn.gaussian_process.gpr. This is simply passed on to that class.
+
+    standardize_y : boolean (default : False)
+        Whether to de-mean and scale the target variables. Simply passed on
+        to the gpr class.
+
+    standardize_X : boolean (default : True)
+        Whether to de-mean and scale the predictor variables using the sklearn
+        StandardScaler. The scaling is automatically handled at prediction
+        time as well for the prediction locations. This can improve both
+        predictive performance and computational time in some cases.
+
     Attributes
     ----------
-    self.kernel : kernel object
+    self.kernel : kernel object (default: None)
         The kernel specifying the covariance function of each GP expert.
+        If set None, the experts each use their own default kernel.
 
     self.points_per_expert : integer (default: False)
         The maximum number of points to assign to each expert.
@@ -62,15 +83,21 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         The individual sub-models fit to partitions of the data
 
     self.X : array, shape = (n_samples, n_features)
-        The data that is to be fit to self.y in a scaled form
+        The data that is to be fit to self.y, in a scaled
+        form if standardize_X=True
 
     self.y : array, shape = (n_samples, n_output_dims)
         The data that is being fit by self.X
     """
-    def __init__(self, kernel=None, points_per_expert=None, locality=False, max_points=None):
+    def __init__(self, kernel=None, points_per_expert=None, locality=False,
+                 max_points=None, n_restarts_optimizer=0, normalize_y=False,
+                 standardize_X=False):
         self.locality = locality
         self.kernel = kernel
         self.points_per_expert = points_per_expert
+        self.n_restarts_optimizer = n_restarts_optimizer
+        self.normalize_y = normalize_y
+        self.standardize_X = standardize_X
 
     def fit(self, X, y):
         """Fits X to y with a robust Bayesian Committee Machine model.
@@ -88,7 +115,13 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         ----------
         self : returns an instance of self.
         """
+        if self.n_restarts_optimizer < 0:
+            self.n_restarts_optimizer = 0
+
         if self.kernel is None:
+            # Could assign self.kernel explicitly to the default kernel
+            # used by gpr class, but instead lets just hard code the prior's
+            # std that we'll need and let the gpr class set the default kernel
             self.prior_std = 1
         else:
             self.prior_std = self.kernel(self.kernel.diag(np.arange(1)))[0]
@@ -96,9 +129,12 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
 
         X, y = check_X_y(X, y, multi_output=True, y_numeric=True)
 
-        # We scale all the data as one, not individually
-        self.scaler = StandardScaler()
-        self.X = self.scaler.fit_transform(X)
+        # We normalize all the data as one, not individually
+        if self.standardize_X:
+            self.scaler = StandardScaler()
+            self.X = self.scaler.fit_transform(X)
+        else:
+            self.X = X
         self.y = y
 
         # Partition the indices of the data into sample_sets
@@ -107,7 +143,8 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         # Generate iterable list of arguments to map out to procs
         args_iter = []
         for samples in sample_sets:
-            args_iter.append([self.kernel, samples, self.X, self.y])
+            args_iter.append([self.kernel, samples, self.X, self.y,
+                              self.n_restarts_optimizer, self.normalize_y])
 
         # Actually do the parallel fitting on each partition now
         self.experts = []
@@ -121,7 +158,7 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
             self.experts.append(_worker_fit_wrapper(args_iter[0]))
         return self
 
-    def predict(self, X, return_var=False, batch_size=-1, in_parallel=False):
+    def predict(self, X, return_var=False, batch_size=-1, in_parallel=True):
         """Predict using the robust Bayesian Committee Machine model
 
         Parameters:
@@ -150,7 +187,8 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
             Only returned if return_var is True.
         """
         X = check_array(X)
-        X = self.scaler.transform(X)
+        if self.standardize_X:
+            X = self.scaler.transform(X)
         num_experts = len(self.experts)
 
         if num_experts == 1:
@@ -224,11 +262,9 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         """Return a list of lists each containing a partition of the indices
         of the data to be fit.
         """
-        # We get to set our own points_per_expert policy if not set
         if self.points_per_expert is None:
-            # Only have multiple experts if data set is not trivially small
-            if self.num_samples > 1024:
-                self.points_per_expert = 1024
+            if self.num_samples > _MIN_POINTS_FOR_RBCM:
+                self.points_per_expert = _DEFAULT_POINTS_PER_EXPERT
             else:
                 self.points_per_expert = self.num_samples
 
@@ -259,9 +295,10 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         return sample_sets
 
 
-def _worker_fit(kernel, sample_indices, X, y):
+def _worker_fit(kernel, sample_indices, X, y, n_restarts_optimizer, normalize_y):
     """This contains the parallel workload used in the fitting of the rbcm"""
-    gpr = GPR(kernel, normalize_y=False, n_restarts_optimizer=5)
+    gpr = GPR(kernel, n_restarts_optimizer=n_restarts_optimizer,
+              copy_X_train=False, normalize_y=normalize_y)
     gpr.fit(X[sample_indices, :], y[sample_indices, :])
     return gpr
 

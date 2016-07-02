@@ -1,12 +1,12 @@
 # rBCM - robust Bayesian Committee Machine
 
-A python package for fitting a robust Bayesian Committe Machine (rBCM) to data and
+A python package for fitting a robust Bayesian Committee Machine (rBCM) to data and
 then predicting with it. This is much more highly scalable than Gaussian
 Process regression (GPR) while still providing a good approximation to a full GPR
-model.
+model. The rBCM contains the exact GPR as a special case.
 
 The package is built on top of and found much inspiration from the
-gaussian_process package found in scikit-learn.
+`sklearn.gaussian_process` package found in scikit-learn.
 
 See the paper below for more information on the statistics of this modeling
 approach. The description of the rBCM within was the foundation for this
@@ -72,7 +72,11 @@ performance falloff.
 
 This package considers a 'good' prediction as being close to the prediction of
 a full GPR model fit to the entire dataset. The goal is to mirror the results
-of GPR with better computational performance.
+of GPR with better computational performance. The following graphs show how
+the rBCM can perform just as well as a GPR. The rBCM had 4 experts each trained
+on 256 randomly selected points out of the total 1024 data points.
+
+![GPR versus rBCM Graphs](docs/graphs/gprVSrbcm_4experts.png?raw=true "Optional Title")
 
 ## Usage
 
@@ -85,11 +89,11 @@ import numpy as np
 from rBCM.rbcm import RobustBayesianCommitteeMachineRegressor as RBCM
 machine = RBCM()
 
-def func(X):
-    return np.sin(X) + X**2
+def f1(x):
+    return np.abs(np.sin(x)) * 5
 
-X = np.arange(10000, dtype=np.float64).reshape(-1, 1) / 100
-y = func(X)
+X = np.linspace(10, 20, 100, dtype=np.float64)
+y = f1(X1)
 machine.fit(X, y)
 predictions = machine.predict(X)
 ```
@@ -119,7 +123,7 @@ experts. Which one is used is passed as a boolean argument at instantiation
 time of the rBCM object with the `locality` parameter. If False, the random
 approach is taken. If True, the clustering approach is used.
 
-#### Random
+##### Random
 
 The first is simply a random partitioning of the data into as many equally-
 sized chunks as there will be experts. This may be desirable for two reasons
@@ -130,7 +134,7 @@ sized chunks as there will be experts. This may be desirable for two reasons
 2. The computational complexity of clustering is non-trivial and may need to be
    avoided depending on the user's needs.
 
-#### Clustered
+##### Clustered
 
 This approach employs the Birch clustering algorithm implemented in scikit-
 learn to cluster the dataset into as many clusters as there will be experts in
@@ -143,6 +147,13 @@ This should lead to the weighting procedure finding one expert at each
 prediction location which has very high certainty, while all the other models
 should have very low certainty. This sometimes has been observed to induce
 predictions closer to that of the full GPR, but not always.
+
+This, I believe, violates the independence of the experts though. Their
+independence is assumed in the derivation of the rBCM approach; the log
+marginal liklihood of the entire overall rBCM model is able to be factored
+into the product of the log marginal liklihood's of the many independent
+experts, but only if they are independent. See the powerpoint linked at the
+bottom of the readme.
 
 
 ### Weighting
@@ -187,5 +198,6 @@ variance of the overall rBCM's predictions.
 
 ## Relevant References
     
-* [Bayesian Committee Machine background information](http://www.dbs.ifi.lmu.de/~tresp/papers/bcm6.pdf)
+* [Easily digestable powerpoint deck on rBCM's](http://www.doc.ic.ac.uk/~mpd37/talks/2015-05-21-gpws.pdf)
+* [BCM background information](http://www.dbs.ifi.lmu.de/~tresp/papers/bcm6.pdf)
 * [Other alternative ways to scale gaussian process regression](http://www.dbs.ifi.lmu.de/~tresp/papers/nips02_approxgp.pdf)
