@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 
 from setuptools import setup, find_packages
-from Cython.Build import cythonize
 import sys
 import subprocess
 import numpy as np
-
-cython_sources = ["rBCM/weighting.pyx"]
 
 
 def setup_package():
@@ -18,7 +15,6 @@ def setup_package():
         version="0.0.1",
         license="See LICENSE file.",
         packages=find_packages(),
-        ext_modules=cythonize(cython_sources),
         include_dirs=[np.get_include()]
     )
 
@@ -34,6 +30,7 @@ def cleanup_build():
     subprocess.Popen('rm -rf rBCM.egg-info', shell=True, executable="bash")
     subprocess.Popen('find . -name "__pycache__" -type d -delete', shell=True, executable="bash")
     subprocess.Popen('rm -rf ./tests/visuals/*', shell=True, executable="bash")
+    subprocess.Popen('rm -rf ./benchmarks/visuals/*', shell=True, executable="bash")
 
     # do the normal cleaning too
     sys.argv[1] = "clean"

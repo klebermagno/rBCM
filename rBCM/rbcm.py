@@ -138,11 +138,11 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         self.y = y
 
         # Partition the indices of the data into sample_sets
-        sample_sets = self._generate_partitioned_indices()
+        self.sample_sets = self._generate_partitioned_indices()
 
         # Generate iterable list of arguments to map out to procs
         args_iter = []
-        for samples in sample_sets:
+        for samples in self.sample_sets:
             args_iter.append([self.kernel, samples, self.X, self.y,
                               self.n_restarts_optimizer, self.normalize_y])
 
@@ -151,7 +151,7 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         if len(args_iter) != 1:
             pool = mp.Pool()
             experts = pool.imap(_worker_fit_wrapper, args_iter)
-            for i in range(len(sample_sets)):
+            for i in range(len(self.sample_sets)):
                 self.experts.append(experts.next())
             pool.close()
         else:
@@ -196,8 +196,10 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
 
         # Bypass all the slow stuff if we are just making a point prediction
         if X.shape[0] == 1:
+            predictions = np.empty((1, self.y.shape[1], num_experts))
+            sigma = np.empty((1, num_experts))
             for i in range(num_experts):
-                predictions, sigma = self.experts[i].predict(X)
+                predictions[:, :, i], sigma[:, i] = self.experts[i].predict(X)
 
         # If not making point prediction we do all the large scale work though
         else:
@@ -273,7 +275,7 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         if self.locality:
             num_clusters = int(float(self.num_samples) / self.points_per_expert)
 
-            birch = Birch(n_clusters=num_clusters)
+            birch = Birch(n_clusters=num_clusters, threshold=0.2)
             labels = birch.fit_predict(self.X)
 
             unique_labels = np.unique(labels)

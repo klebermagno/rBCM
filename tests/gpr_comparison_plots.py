@@ -2,7 +2,7 @@
 import os
 import numpy as np
 from bokeh.plotting import figure, output_file, save, gridplot
-from bokeh.palettes import Blues4
+from bokeh.palettes import Blues4, Plasma10
 
 
 def create_residuals_plot(X, y1, y2, model1_name=None, model2_name=None):
@@ -20,7 +20,7 @@ def create_residuals_plot(X, y1, y2, model1_name=None, model2_name=None):
 
 
 def var_diff_plot(X, y1, sigma1, y2, sigma2, model1_name=None, model2_name=None):
-    title = "Difference of variance of the posteriors: Var(" + str(model1_name) + ") - Var(" + str(model2_name) + ")"
+    title = "Difference of the variance of the posteriors: Var(" + str(model1_name) + ") - Var(" + str(model2_name) + ")"
     p = figure(title=title)
     var1 = np.power(sigma1, 2)
     var2 = np.power(sigma2, 2)
@@ -35,7 +35,7 @@ def var_diff_plot(X, y1, sigma1, y2, sigma2, model1_name=None, model2_name=None)
     return p
 
 
-def create_regression_plot(X, y, predict_X, predict_y, sigma, model_name=None, time=-1):
+def create_regression_plot(X, y, predict_X, predict_y, sigma, model_name=None, time=-1, clusters=None):
     p = figure(title="The " + str(model_name) + " model - " + str(time) + "s - Kernel: C(1.0) * RBF(1.0) + WhiteKernel(1.0)", width=600, plot_height=600)
 
     top = predict_y + 1.96 * sigma
@@ -46,7 +46,11 @@ def create_regression_plot(X, y, predict_X, predict_y, sigma, model_name=None, t
            right=right.ravel(), color=Blues4[1],
            alpha=0.5, line_width=0)
     p.line(predict_X, predict_y, color='black', legend='Predictive Mean', line_width=3)
-    p.scatter(X, y, size=5, legend="Underlying dataset", color='black')
+    if clusters is None:
+        p.scatter(X, y, size=3, legend="Underlying dataset", color='black')
+    else:
+        for i in range(len(clusters)):
+            p.scatter(X[clusters[i]], y[clusters[i]], size=3, color=Plasma10[i % len(Plasma10)])
     p.xaxis.axis_label = "X"
     p.yaxis.axis_label = "y"
     return p
@@ -54,7 +58,7 @@ def create_regression_plot(X, y, predict_X, predict_y, sigma, model_name=None, t
 
 def compare_1d_plots(output_filename, X, y, predict_X,
                      gpr_y, gpr_sigma, gpr_time,
-                     rbcm_y, rbcm_sigma, rbcm_time):
+                     rbcm_y, rbcm_sigma, rbcm_time, expert_sets):
     """Create a scatter plot with the 1d regression lines of both the GPR and
     the rBCM through the data. Assumes both models were predicted onto the
     same points, predict_X.
@@ -62,7 +66,7 @@ def compare_1d_plots(output_filename, X, y, predict_X,
     gpr_regression_plot = create_regression_plot(X, y, predict_X, gpr_y, gpr_sigma, model_name="GPR", time=gpr_time)
     var_difference_plot = var_diff_plot(predict_X, gpr_y, gpr_sigma, rbcm_y, rbcm_sigma, model1_name="GPR", model2_name="rBCM")
     residuals_plot = create_residuals_plot(predict_X, gpr_y, rbcm_y)
-    rbcm_regression_plot = create_regression_plot(X, y, predict_X, rbcm_y, rbcm_sigma, model_name="rBCM", time=rbcm_time)
+    rbcm_regression_plot = create_regression_plot(X, y, predict_X, rbcm_y, rbcm_sigma, model_name="rBCM", time=rbcm_time, clusters=expert_sets)
 
     title = "GPR took: " + str(gpr_time) + "s     rBCM took: " + str(rbcm_time) + "s"
 

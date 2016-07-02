@@ -14,7 +14,7 @@ implementation. There is also interesting comparison of rBCM with the Bayesian
 Committee Machine and General Product of Experts models; how they are closely
 related and how their performance differs statistically and computationally.
 
-* [Distributed Gaussian Processes](jmlr.org/proceedings/papers/v37/deisenroth15.pdf)
+* [Distributed Gaussian Processes](http://www.jmlr.org/proceedings/papers/v37/deisenroth15.pdf)
 
 In concept, a robust Bayesian Committee Machine could be run in parallel in a
 distributed environment on huge datasets. Though this implementation is
@@ -72,9 +72,20 @@ performance falloff.
 
 This package considers a 'good' prediction as being close to the prediction of
 a full GPR model fit to the entire dataset. The goal is to mirror the results
-of GPR with better computational performance. The following graphs show how
-the rBCM can perform just as well as a GPR. The rBCM had 4 experts each trained
-on 256 randomly selected points out of the total 1024 data points.
+of GPR with better computational performance. 
+
+The following graphs show how the rBCM can perform just as well as a GPR. The
+rBCM had 4 experts each trained on 256 randomly selected points out of the
+total 1024 data points. Then these fitted experts were used to predict onto
+2000 evenly spaced points to generate the predictive mean line and 95%
+confidence band. The data was standardized before fitting and prediction as
+well. 
+
+This was run on my laptop with 4 cores (matching the 4 experts) and the rBCM
+took only ~10 seconds compared to the ~53 seconds of the full GPR from
+sklearn. This was also permitting every expert in the rBCM 2 restarts on its
+parameter optimization runs, as well as 2 restarts for the full GPR model
+itself.
 
 ![GPR versus rBCM Graphs](docs/graphs/gprVSrbcm_4experts.png?raw=true "Optional Title")
 
