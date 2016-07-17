@@ -11,11 +11,9 @@ or have worse scalability characteristics than the rBCM.
 
 If you use this package on a multicore machine you should expect to see at
 least a 10x speed up from a full GPR. As you increase the size of the data you
-are working with, this only improves. There is significant parallel scaling in
-an rBCM not present in a GPR and running on a machine with twice as many cores
-can oftentimes double the speed.
+are working with, this only improves due to the GPR's awful scaling.
 
-After a certain size GPR is also simply intractable, so the rBCM can compute
+After a certain size GPR is simply intractable, so the rBCM can compute
 predictions that mimic a GPR prediction on data sets for which it is
 practically infeasible to compute a real GPR prediction.
 
@@ -39,6 +37,7 @@ setup.py clean`.
 This package requires:
 * Numpy
 * scikit-learn
+* Bokeh [only for testing visualizations]
 
 To run the test suite, navigate to the tests directory and call `nose2`.
 
@@ -216,14 +215,14 @@ using a GPR, but they are surmountable with a little careful attention.
 
 If you have multiple experts their predictions will be averaged in some sense,
 and if the underlying dataset has significant complexity this averaging may
-blur out that complex behavior without careful usage.
+blur out that complex behavior.
 
 For example, highly oscillatory data could result in a rBCM fit, with say only
 2 experts, that simply follows the center of that oscillation rather than
 tracking along the back and forth motion. A full GPR may capture the entire
 motion automatically due to not being affected by that blurring of the two
 models. An rBCM captures extreme sudden behaviors in the data worse than a GPR
-without careful use.
+under certain circumstances.
 
 However, this is easily remedied by having sufficiently large datasets and by
 choosing a smarter number of experts. You need enough that each gets a
@@ -245,13 +244,17 @@ number of experts.
 Similarly, if you are fitting a trivially small dataset, the rBCM is not a
 good choice as it will split your already limited data into even smaller
 datasets for each model. This package silently serves you a full GPR in the
-case that `n < 1024` by implicitly setting the number of experts to 1.
+case that `n < 2048` by overriding the number of experts to 1.
 
 ## Relevant References
     
 <a name="ref1.">1.</a> [Distributed Gaussian Processes](http://www.jmlr.org/proceedings/papers/v37/deisenroth15.pdf)
+
 <a name="ref2.">2.</a> [Easily digestable powerpoint deck on rBCM's](http://www.doc.ic.ac.uk/~mpd37/talks/2015-05-21-gpws.pdf)
+
 <a name="ref3.">3.</a> [BCM background information](http://www.dbs.ifi.lmu.de/~tresp/papers/bcm6.pdf)
+
 <a name="ref4.">4.</a> [Other alternative ways to scale gaussian process regression](http://www.dbs.ifi.lmu.de/~tresp/papers/nips02_approxgp.pdf)
+
 <a name="ref5.">5.</a> [Generalized Product of Experts for Automatic and Principled Fusion of Gaussian Process Predictions](http://arxiv.org/pdf/1410.7827v2.pdf)
 
