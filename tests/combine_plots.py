@@ -1,4 +1,4 @@
-"""Plots to create visual comparisons to Gaussian Process Regression.
+"""Plots to visually compare the predictions of the experts in an rBCM.
 
 Should create a single static html file in tests/visuals when run. Externally
 you should only call the compare_1d_plots function."""
@@ -78,20 +78,12 @@ def compare_1d_plots(output_filename, X, y, predict_X,
     if rbcm_time is None or gpr_time is None:
         rbcm_time = "Unknown "
         gpr_time = "Unknown "
-    gpr_regression_plot = _create_regression_plot(X, y, predict_X,
-                                                  gpr_y, gpr_sigma,
-                                                  model_name="GPR", time=gpr_time)
-    var_difference_plot = _var_diff_plot(predict_X, gpr_y,
-                                         gpr_sigma, rbcm_y,
-                                         rbcm_sigma, model1_name="GPR",
-                                         model2_name="rBCM")
-    residuals_plot = _create_residuals_plot(predict_X, gpr_y, rbcm_y,
-                                            model1_name="GPR", model2_name="rBCM")
-    rbcm_regression_plot = _create_regression_plot(X, y, predict_X, rbcm_y,
-                                                   rbcm_sigma, model_name="rBCM",
-                                                   time=rbcm_time, clusters=expert_sets)
+    gpr_regression_plot = _create_regression_plot(X, y, predict_X, gpr_y, gpr_sigma, model_name="GPR", time=gpr_time)
+    var_difference_plot = _var_diff_plot(predict_X, gpr_y, gpr_sigma, rbcm_y, rbcm_sigma, model1_name="GPR", model2_name="rBCM")
+    residuals_plot = _create_residuals_plot(predict_X, gpr_y, rbcm_y)
+    rbcm_regression_plot = _create_regression_plot(X, y, predict_X, rbcm_y, rbcm_sigma, model_name="rBCM", time=rbcm_time, clusters=expert_sets)
 
-    title = "GPR took: " + str(gpr_time) + "s ---- rBCM took: " + str(rbcm_time) + "s"
+    title = "GPR took: " + str(gpr_time) + "s     rBCM took: " + str(rbcm_time) + "s"
 
     output_file(os.path.dirname(__file__) + "/visuals/" + output_filename + ".html", title=title)
 

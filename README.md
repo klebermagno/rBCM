@@ -3,7 +3,21 @@
 A python package for fitting a robust Bayesian Committee Machine (rBCM) to data and
 then predicting with it. This is much more highly scalable than Gaussian
 Process regression (GPR) while still providing a good approximation to a full GPR
-model. The rBCM contains the exact GPR as a special case.
+model. The rBCM contains the exact GPR model as a special case.
+
+Other alternatives to scaling GPR have undesirable downsides (discussed in
+[reference 4](#ref4)). They are typically either too inaccurate to a full GPR
+or have worse scalability characteristics than the rBCM.
+
+If you use this package on a multicore machine you should expect to see at
+least a 10x speed up from a full GPR. As you increase the size of the data you
+are working with, this only improves. There is significant parallel scaling in
+an rBCM not present in a GPR and running on a machine with twice as many cores
+can oftentimes double the speed.
+
+After a certain size GPR is also simply intractable, so the rBCM can compute
+predictions that mimic a GPR prediction on data sets for which it is
+practically infeasible to compute a real GPR prediction.
 
 The package is built on top of and found much inspiration from the
 `sklearn.gaussian_process` package found in scikit-learn.
@@ -16,10 +30,6 @@ related and how their performance differs statistically and computationally.
 
 * [Distributed Gaussian Processes](http://www.jmlr.org/proceedings/papers/v37/deisenroth15.pdf)
 
-In concept, a robust Bayesian Committee Machine could be run in parallel in a
-distributed environment on huge datasets. Though this implementation is
-parallelized only by using the python multiprocessing library.
-
 ## Installation
 
 To install rBCM, run `sudo python setup.py install -i` inside the rBCM top-
@@ -28,14 +38,14 @@ setup.py clean`.
 
 This package requires:
 * Numpy
-* Cython
 * scikit-learn
 
 To run the test suite, navigate to the tests directory and call `nose2`.
 
-The test suite builds plots in static html files as visual tests that are
-placed in the `tests/visuals/` directory and requires the bokeh package for
-this. If you don't use the test suite you don't need bokeh though.
+The test suite and benchmark runners build plots in static html files as
+visual tests that are placed in the `tests/visuals/` or benchmarks/visuals/
+directory respectively and requires the bokeh package for this. If you don't
+use the test suite or benchmarks you don't need bokeh though.
 
 ## Why use an rBCM?
 
@@ -91,9 +101,9 @@ itself.
 
 ## Usage
 
-The following are different considerations you should be aware of when using
-this package. Though you may easily use the package without looking at any of
-these things, here is an example:
+The following are different considerations to be aware of when using this
+package. Though you may easily use the package without looking at any of these
+things, here is an example:
 
 ```python
 import numpy as np
@@ -104,7 +114,7 @@ def f1(x):
     return np.abs(np.sin(x)) * 5
 
 X = np.linspace(10, 20, 100, dtype=np.float64)
-y = f1(X1)
+y = f1(X)
 machine.fit(X, y)
 predictions = machine.predict(X)
 ```
@@ -138,7 +148,7 @@ approach is taken. If True, the clustering approach is used.
 
 The first is simply a random partitioning of the data into as many equally-
 sized chunks as there will be experts. This may be desirable for two reasons
-(which I have ctaken from the paper above):
+(which I have taken from the paper above):
 
 1. The experts may not always benefit from clustering, though it won't
    likely make the predictions worse it may not improve them either.
@@ -150,7 +160,7 @@ sized chunks as there will be experts. This may be desirable for two reasons
 This approach employs the Birch clustering algorithm implemented in scikit-
 learn to cluster the dataset into as many clusters as there will be experts in
 the rBCM. The virtue of this is that each expert will have, in the region in
-which it is a local expert (now the 'expert' nomenclature makes more sense),
+which it is a local expert (now the 'expert' nomenclature is more fitting),
 all the possible data for that location. It will not have some subsampling of
 the data in that region given by random chance, it will have all of it.
 
@@ -158,13 +168,6 @@ This should lead to the weighting procedure finding one expert at each
 prediction location which has very high certainty, while all the other models
 should have very low certainty. This sometimes has been observed to induce
 predictions closer to that of the full GPR, but not always.
-
-This, I believe, violates the independence of the experts though. Their
-independence is assumed in the derivation of the rBCM approach; the log
-marginal liklihood of the entire overall rBCM model is able to be factored
-into the product of the log marginal liklihood's of the many independent
-experts, but only if they are independent. See the powerpoint linked at the
-bottom of the readme.
 
 
 ### Weighting
@@ -206,9 +209,49 @@ This term is then used as a scaling factor when computing the merged
 prediction from all the expert's predictions as well as when computing the
 variance of the overall rBCM's predictions.
 
+## Why not use an rBCM?
+
+There are issues you may encounter that are different from those found when
+using a GPR, but they are surmountable with a little careful attention.
+
+If you have multiple experts their predictions will be averaged in some sense,
+and if the underlying dataset has significant complexity this averaging may
+blur out that complex behavior without careful usage.
+
+For example, highly oscillatory data could result in a rBCM fit, with say only
+2 experts, that simply follows the center of that oscillation rather than
+tracking along the back and forth motion. A full GPR may capture the entire
+motion automatically due to not being affected by that blurring of the two
+models. An rBCM captures extreme sudden behaviors in the data worse than a GPR
+without careful use.
+
+However, this is easily remedied by having sufficiently large datasets and by
+choosing a smarter number of experts. You need enough that each gets a
+meaningful sampling along all the complex regions of the dataset, but not so
+few that you lose the predictive accuracy resulting from the weighting of the
+several semi-informed experts. You want each expert to have data from the
+entire upward and downward arc of an oscillatory data set, for example.
+
+Another example is data that looks like an exponential curve; the blurring
+effect may cause predictions at the extreme tail to be somewhat smaller than
+the full GPR. The averaging from the other models at the lower part of the
+curve drags the final weighted prediction down.
+
+It's advisable to fit a full GPR to a subsampling of your data and compare the
+output of that with your rBCM to ensure you aren't missing any easily fit
+regions. But the exponential curve example is only fixable by messing with the
+number of experts.
+
+Similarly, if you are fitting a trivially small dataset, the rBCM is not a
+good choice as it will split your already limited data into even smaller
+datasets for each model. This package silently serves you a full GPR in the
+case that `n < 1024` by implicitly setting the number of experts to 1.
 
 ## Relevant References
     
-* [Easily digestable powerpoint deck on rBCM's](http://www.doc.ic.ac.uk/~mpd37/talks/2015-05-21-gpws.pdf)
-* [BCM background information](http://www.dbs.ifi.lmu.de/~tresp/papers/bcm6.pdf)
-* [Other alternative ways to scale gaussian process regression](http://www.dbs.ifi.lmu.de/~tresp/papers/nips02_approxgp.pdf)
+<a name="ref1.">1.</a> [Distributed Gaussian Processes](http://www.jmlr.org/proceedings/papers/v37/deisenroth15.pdf)
+<a name="ref2.">2.</a> [Easily digestable powerpoint deck on rBCM's](http://www.doc.ic.ac.uk/~mpd37/talks/2015-05-21-gpws.pdf)
+<a name="ref3.">3.</a> [BCM background information](http://www.dbs.ifi.lmu.de/~tresp/papers/bcm6.pdf)
+<a name="ref4.">4.</a> [Other alternative ways to scale gaussian process regression](http://www.dbs.ifi.lmu.de/~tresp/papers/nips02_approxgp.pdf)
+<a name="ref5.">5.</a> [Generalized Product of Experts for Automatic and Principled Fusion of Gaussian Process Predictions](http://arxiv.org/pdf/1410.7827v2.pdf)
+

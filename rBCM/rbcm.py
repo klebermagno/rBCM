@@ -16,11 +16,6 @@ from sklearn.utils.validation import check_X_y, check_array
 from weighting import differential_entropy_weighting
 
 
-# Important implementation parameters
-_MIN_POINTS_FOR_RBCM = 2048  # force a full GPR for data with small n
-_DEFAULT_POINTS_PER_EXPERT = 512  # If not degenerate, but passed no ppe
-
-
 class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
     """Robust Bayesian Committee Machine Regression (rBCM).
 
@@ -146,7 +141,7 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
             args_iter.append([self.kernel, samples, self.X, self.y,
                               self.n_restarts_optimizer, self.normalize_y])
 
-        # Actually do the parallel fitting on each partition now
+        # Actually do the fitting on each partition now
         self.experts = []
         if len(args_iter) != 1:
             pool = mp.Pool()
@@ -250,11 +245,13 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
 
             if in_parallel:
                 pool.close()
+
         if num_experts != 1:
             preds, var = differential_entropy_weighting(predictions, sigma, self.prior_std)
         else:
-            preds = predictions
-            var = np.power(sigma, 2)
+            preds = predictions.ravel()
+            var = np.power(sigma, 2).ravel()
+
         if return_var:
             return preds, var
         else:
@@ -264,8 +261,13 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         """Return a list of lists each containing a partition of the indices
         of the data to be fit.
         """
+        # Degenerate to full GPR for data with small n
+        _MIN_POINTS_FOR_RBCM = 2048
+        # If not degenerate, but passed no ppe
+        _DEFAULT_POINTS_PER_EXPERT = int(float(self.num_samples) / mp.cpu_count())
+
         if self.points_per_expert is None:
-            if self.num_samples > _MIN_POINTS_FOR_RBCM:
+            if self.num_samples >= _MIN_POINTS_FOR_RBCM:
                 self.points_per_expert = _DEFAULT_POINTS_PER_EXPERT
             else:
                 self.points_per_expert = self.num_samples

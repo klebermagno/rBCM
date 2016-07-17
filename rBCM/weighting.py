@@ -40,16 +40,20 @@ def differential_entropy_weighting(predictions, sigma, prior_std):
     """
     var = np.power(sigma, 2)
     log_var = np.log(var)
-
     prior_var = np.power(prior_std, 2)
-    log_prior_var = np.log(prior_var)
+    log_prior_var = np.repeat(np.log(prior_var), sigma.shape[0])
 
     # Compute beta weights, page 5 right hand column
-    beta = np.zeros((sigma.shape[0], sigma.shape[1]))
-    for j in range(predictions.shape[1]):
-        beta[:, j] = (0.5) * (log_prior_var - log_var[:, j])
+    beta = 0.5 * (log_prior_var[:, np.newaxis] - log_var[:, :])
 
-    return _combine(predictions, var, beta, prior_var)
+    # Combine the experts according to their beta weight
+    print(predictions[0, :, :])
+    preds_old, var_old = _combine_old(predictions, var, beta, prior_var)
+    print(preds_old[0, :])
+    preds, var = _combine(predictions, var, beta, prior_var)
+    np.allclose(preds_old, preds)
+    np.allclose(var_old, var)
+    return preds, var
 
 
 def _combine(predictions, var, beta, prior_var):
@@ -80,7 +84,56 @@ def _combine(predictions, var, beta, prior_var):
     rbcm_inv_var = left_term + right_term
 
     # Compute Eq. 21
-    preds = np.einsum("ik, ik, ijk->ij", beta, inv_var, predictions)
     rbcm_var = 1 / rbcm_inv_var
+    preds = np.einsum("ik, ik, ijk->ij", beta, inv_var, predictions)
     preds = rbcm_var[:, np.newaxis] * preds[:, :]
+
+    return preds, rbcm_var
+
+
+def _combine_old(predictions, var, beta, prior_var):
+    """Calculate a single prediction from many with the given beta weights.
+
+    This should be able to accept any general measure of uncertainty, beta.
+
+    Parameters
+    -----------
+    predictions : array-like, shape = (n_locations, n_features, n_experts)
+        Values predicted by some sklearn predictor that offers var as well
+
+    var : array-like, shape = (n_locations, n_experts)
+        Variances corresponding to the predictions
+
+    Returns
+    -------
+    predictions : array, shape = (n_locations, n_features)
+
+    rbcm_var : array, shape = (n_locations)
+    """
+    inv_var = 1 / var
+    inv_prior_var = 1 / prior_var
+
+    # Compute Eq. 22
+    beta_sums = np.zeros(predictions.shape[0])
+    left_term = np.zeros(predictions.shape[0])
+    right_term = np.zeros(predictions.shape[0])
+    for j in range(predictions.shape[0]):
+        left_term[j] = np.dot(beta[j, :], inv_var[j, :])
+        beta_sums[j] = np.sum(beta[j, :])
+        right_term[j] = inv_prior_var * (1 - beta_sums[j])
+    rbcm_inv_var = left_term + right_term
+    rbcm_var = 1 / rbcm_inv_var
+    rbcm_var = rbcm_var
+
+    preds = np.zeros((predictions.shape[0], predictions.shape[1]))
+    for i in range(predictions.shape[0]):
+        for j in range(predictions.shape[1]):
+            summation = 0
+            for k in range(predictions.shape[2]):
+                summation += beta[i, k] * inv_var[i, k] * predictions[i, j, k]
+            preds[i, j] = summation
+
+    for i in range(preds.shape[0]):
+        preds[i, :] = rbcm_var[i] * preds[i, :]
+
     return preds, rbcm_var
