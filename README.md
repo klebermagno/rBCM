@@ -6,7 +6,7 @@ Process regression (GPR) while still providing a good approximation to a full GP
 model. The rBCM contains the exact GPR model as a special case.
 
 Other alternatives to scaling GPR have undesirable downsides (discussed in
-[reference 4](#ref4)). They are typically either too inaccurate to a full GPR
+reference 4 at bottom). They are typically either too inaccurate to a full GPR
 or have worse scalability characteristics than the rBCM.
 
 If you use this package on a multicore machine you should expect to see at
@@ -82,21 +82,6 @@ performance falloff.
 This package considers a 'good' prediction as being close to the prediction of
 a full GPR model fit to the entire dataset. The goal is to mirror the results
 of GPR with better computational performance. 
-
-The following graphs show how the rBCM can perform just as well as a GPR. The
-rBCM had 4 experts each trained on 256 randomly selected points out of the
-total 1024 data points. Then these fitted experts were used to predict onto
-2000 evenly spaced points to generate the predictive mean line and 95%
-confidence band. The data was standardized before fitting and prediction as
-well. 
-
-This was run on my laptop with 4 cores (matching the 4 experts) and the rBCM
-took only ~10 seconds compared to the ~53 seconds of the full GPR from
-sklearn. This was also permitting every expert in the rBCM 2 restarts on its
-parameter optimization runs, as well as 2 restarts for the full GPR model
-itself.
-
-![GPR versus rBCM Graphs](docs/graphs/gprVSrbcm_4experts.png?raw=true "Optional Title")
 
 ## Usage
 

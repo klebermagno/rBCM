@@ -14,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 
 from rBCM.rbcm import RobustBayesianCommitteeMachineRegressor as RBCM
 from tests.gpr_comparison_plots import compare_1d_plots
-from tests.data_generators import f2, add_noise
+from tests.data_generators import f1, add_noise
 
 
 # def test_is_valid_estimator():
@@ -52,11 +52,11 @@ def test_visual_gpr_vs_rbcm():
     comparing the output from a full GPR and an rbcm model. This directory
     should be checked after running the tests to ensure everything looks
     normal."""
-    data_scale = 1024 * 1.99
-    ppe_scale = 512
-    X_1 = np.linspace(0, 1000, 1024, dtype=np.float64)
-    X1 = np.linspace(0, 1000, data_scale, dtype=np.float64)
-    y1 = f2(X1)
+    data_scale = int(1024 * 1.99)
+    ppe_scale = data_scale
+    X_1 = np.linspace(0, 200 , 1024, dtype=np.float64)
+    X1 = np.linspace(0, 200, data_scale, dtype=np.float64)
+    y1 = f1(X1)
     y1 = add_noise(y1, 0.2)
 
     t = time.time()
@@ -79,7 +79,7 @@ def test_degenerates_to_gpr():
     permits no difference in output between the two."""
     X_1 = np.linspace(0, 100, 100, dtype=np.float64)
     X1 = np.linspace(0, 100, 512, dtype=np.float64)
-    y1 = f2(X1)
+    y1 = f1(X1)
     y1 = add_noise(y1, 0.2)
 
     gpr_fit, gpr_sigma = get_gpr_model_predictions(X1, y1, X_1, 0)
@@ -95,7 +95,7 @@ def test_full_points_per_expert_is_gpr():
     it's points_per_expert parameter set to the full data set"""
     X_1 = np.linspace(0, 100, 100, dtype=np.float64)
     X1 = np.linspace(0, 100, 512, dtype=np.float64)
-    y1 = f2(X1)
+    y1 = f1(X1)
     y1 = add_noise(y1, 0.2)
 
     gpr_fit, gpr_sigma = get_gpr_model_predictions(X1, y1, X_1, 0)
