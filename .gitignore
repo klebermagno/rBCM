@@ -1,12 +1,13 @@
 *.egg-info
 **__pycache__
-**.pyc
+**.py[ocd]
 **.so
-**.pyd
 **.ipynb_checkpoints/
 
 dist/
 build/
+venv
 .cache
+.tox
 tests/.coverage
 tests/visuals/

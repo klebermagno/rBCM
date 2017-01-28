@@ -10,33 +10,29 @@ import numpy as np
 def differential_entropy_weighting(predictions, sigma, prior_std):
     """Weight the predictions of experts and reduce to a single prediction.
 
-    This weighting function computes the beta uncertainty measure as:
+    This formula can be described as:
         The differential entropy between the prior predictive distribution and
-        the posterior predictive distribution. Given as one half the
-        difference between the log of the prior's variance and the log of the
-        posterior's variance at the location of the prediction.
+        the posterior predictive distribution.
 
-    See 'jmlr.org/proceedings/papers/v37/deisenroth15.pdf' page 5 for a
-    description of this weighting in the context of an rBCM.
+    See 'jmlr.org/proceedings/papers/v37/deisenroth15.pdf' page 5 for a better
+    description of this weighting and the exact formulas.
 
-    Parameters:
-    ----------
-    predictions : array, shape = (n_locations, y_num_columns, num_experts)
-        The values predicted by each expert
+    Args:
+        predictions : array, shape = (n_locations, y_num_columns, num_experts)
+            The values predicted by each expert
 
-    sigma : array, shape = (n_locations, num_experts)
-        The uncertainty of each expert at each location
+        sigma : array, shape = (n_locations, num_experts)
+            The uncertainty of each expert at each location
 
-    prior_std : float
-        The standard deviation of the prior used to fit the GPRs
+        prior_std : float
+            The standard deviation of the prior used to fit the GPRs
 
-    Returns
-    -------
-    preds : array, shape = (n_locations, y_num_columns)
-        Mean of predictive distribution at query points
+    Returns:
+        preds : array, shape = (n_locations, y_num_columns)
+            Mean of predictive distribution at query points
 
-    rbcm_var : array, shape = (n_locations, )
-        Variance of predictive distribution at query points
+        rbcm_var : array, shape = (n_locations, )
+            Variance of predictive distribution at query points
     """
     var = np.power(sigma, 2)
     log_var = np.log(var)
@@ -61,19 +57,17 @@ def _combine(predictions, var, beta, prior_var):
 
     This should be able to accept any general measure of uncertainty, beta.
 
-    Parameters
-    -----------
-    predictions : array-like, shape = (n_locations, n_features, n_experts)
-        Values predicted by some sklearn predictor that offers var as well
+    Args:
+        predictions : array-like, shape = (n_locations, n_features, n_experts)
+            Values predicted by some sklearn predictor that offers var as well
 
-    var : array-like, shape = (n_locations, n_experts)
-        Variances corresponding to the predictions
+        var : array-like, shape = (n_locations, n_experts)
+            Variances corresponding to the predictions
 
-    Returns
-    -------
-    predictions : array, shape = (n_locations, n_features)
+    Returns:
+        predictions : array, shape = (n_locations, n_features)
 
-    rbcm_var : array, shape = (n_locations)
+        rbcm_var : array, shape = (n_locations)
     """
     inv_var = 1 / var
     inv_prior_var = 1 / prior_var
@@ -96,19 +90,17 @@ def _combine_old(predictions, var, beta, prior_var):
 
     This should be able to accept any general measure of uncertainty, beta.
 
-    Parameters
-    -----------
-    predictions : array-like, shape = (n_locations, n_features, n_experts)
-        Values predicted by some sklearn predictor that offers var as well
+    Args:
+        predictions : array-like, shape = (n_locations, n_features, n_experts)
+            Values predicted by some sklearn predictor that offers var as well
 
-    var : array-like, shape = (n_locations, n_experts)
-        Variances corresponding to the predictions
+        var : array-like, shape = (n_locations, n_experts)
+            Variances corresponding to the predictions
 
-    Returns
-    -------
-    predictions : array, shape = (n_locations, n_features)
+    Returns:
+        predictions : array, shape = (n_locations, n_features)
 
-    rbcm_var : array, shape = (n_locations)
+        rbcm_var : array, shape = (n_locations)
     """
     inv_var = 1 / var
     inv_prior_var = 1 / prior_var

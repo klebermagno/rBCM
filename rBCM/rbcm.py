@@ -20,69 +20,47 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
     """Robust Bayesian Committee Machine Regression (rBCM).
 
     See 'jmlr.org/proceedings/papers/v37/deisenroth15.pdf' for the whitepaper
-    describing the rBCM which this implementation is based on.
+    describing the statistical behavior which this implementation provides.
 
-    Parameters
-    ----------
-    kernel : kernel object
-        The kernel specifying the covariance function of each GP expert.
-        If None is passed, "1.0 * RBF(1.0) + WhiteKernel(1e-10)" is used
-        as the default kernel. Note that the WhiteKernel term means this
-        is different from the sklearn.gaussian_process.gpr default, though
-        the alpha=1e-10 default from gpr is set to 0 implicitly here to
-        compensate.
+    Args:
+        kernel : sklearn kernel object
+            The kernel specifying the covariance function of each GP expert.
+            If None is passed, "1.0 * RBF(1.0) + WhiteKernel(1e-10)" is used
+            as the default kernel. Note that the WhiteKernel term means this
+            is different from the sklearn.gaussian_process.gpr default, though
+            the alpha=1e-10 default from gpr is set to 0 implicitly here to
+            compensate.
 
-    points_per_expert : integer (default: None)
-        The maximum number of points to assign to each expert. Smaller causes
-        there to be more experts (more parallelism), but each has fewer data
-        points to train on and accuracy may degrade. The default None permits
-        the RBCM implementation to decide however it wants.
+        points_per_expert : integer (default: None)
+            The maximum number of points to assign to each expert. Smaller
+            causes there to be more experts (more parallelism), but each has
+            fewer data points to train on and accuracy may degrade. The default
+            None permits the RBCM implementation to decide however it wants.
 
-    locality : boolean (default : False)
-        False to randomly assign data to experts. True to use Birch
-        clustering to assign data in local groups to experts
+        locality : boolean (default : False)
+            False to randomly assign data to experts. True to use Birch
+            clustering to assign data in local groups to experts
 
-    max_points : integer (default : None)
-        A cap on the total data the RBCM will look at when fit, best used for
-        development to test on a subset of a large dataset quickly
+        max_points : integer (default : None)
+            A cap on the total data the RBCM will look at when fit, best used
+            for development to test on a subset of a large dataset quickly
 
-    n_restarts_optimizer : non-negative integer (default : 0)
-        The number of restarts each GPR gets on it's optimization procedure,
-        the restarts pull parameters as described in the module
-        sklearn.gaussian_process.gpr. This is simply passed on to that class.
+        n_restarts_optimizer : non-negative integer (default : 0)
+            The number of restarts each GPR gets on it's optimization
+            procedure, the restarts pull parameters as described in the module
+            sklearn.gaussian_process.gpr. This is simply passed on to that
+            class.
 
-    standardize_y : boolean (default : False)
-        Whether to de-mean and scale the target variables. Simply passed on
-        to the gpr class.
+        standardize_y : boolean (default : False)
+            Whether to de-mean and scale the target variables. Simply passed on
+            to the gpr class.
 
-    standardize_X : boolean (default : True)
-        Whether to de-mean and scale the predictor variables using the sklearn
-        StandardScaler. The scaling is automatically handled at prediction
-        time as well for the prediction locations. This can improve both
-        predictive performance and computational time in some cases.
-
-    Attributes
-    ----------
-    self.kernel : kernel object (default: None)
-        The kernel specifying the covariance function of each GP expert.
-        If set None, the experts each use their own default kernel.
-
-    self.points_per_expert : integer (default: False)
-        The maximum number of points to assign to each expert.
-
-    self.locality : boolean (default: False)
-        False to randomly assign data to experts. True to use Birch
-        clustering to assign data in local groups to experts
-
-    self.experts : list of GaussianProcessRegressor objects
-        The individual sub-models fit to partitions of the data
-
-    self.X : array, shape = (n_samples, n_features)
-        The data that is to be fit to self.y, in a scaled
-        form if standardize_X=True
-
-    self.y : array, shape = (n_samples, n_output_dims)
-        The data that is being fit by self.X
+        standardize_X : boolean (default : True)
+            Whether to de-mean and scale the predictor variables using the
+            sklearn StandardScaler. The scaling is automatically handled at
+            prediction time as well for the prediction locations. This can
+            improve both predictive performance and computational time in some
+            cases.
     """
     def __init__(self, kernel=None, points_per_expert=None, locality=False,
                  max_points=None, n_restarts_optimizer=0, normalize_y=False,
@@ -100,15 +78,13 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         Note that the rBCM retains a copy of the training data implicitly as
         each GPR expert retains a reference to their partition for prediction.
 
-        Parameters:
-        ----------
-        X : array, shape = (n_samples, n_features)
+        Args:
+            X : array, shape = (n_samples, n_features)
 
-        y : array, shape = (n_samples, n_output_dims)
+            y : array, shape = (n_samples, n_output_dims)
 
         Returns:
-        ----------
-        self : returns an instance of self.
+            self : returns an instance of self.
         """
         if self.n_restarts_optimizer < 0:
             self.n_restarts_optimizer = 0
@@ -153,33 +129,37 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
             self.experts.append(_worker_fit_wrapper(args_iter[0]))
         return self
 
-    def predict(self, X, return_var=False, batch_size=-1, in_parallel=True):
+    def predict(self, X, return_var=False, batch_size=None, in_parallel=True):
         """Predict using the robust Bayesian Committee Machine model
 
-        Parameters:
-        ----------
-        X : array, shape = (n_locations, n_features)
-            Query points where the rBCM is evaluated
+        Args:
+            X : array, shape = (n_locations, n_features)
+                Query points where the rBCM is evaluated
 
-        batch_size : integer
-            indicating a batch_size to predict at once, this limits memory
-            consumption when predicting on large X. The default -1 means no
-            batching.
+            batch_size : integer
+                When given a large set of points at which to create
+                predictions, this parameter can limit processing to a given
+                batch size of the prediction points at once.
 
-        in_parallel: boolean
-            Whether to use a parallel implementation or not to predict at each
-            location in X. If only predicting a single point or if predicting
-            with only one expert, this arg is ignored. For small X, consider
-            setting false.
+                The default None means no batching.
+
+                This is useful for creating fuzzy upper memory bounds in cases
+                where you ask the experts to, in parallel, each compute a
+                prediction at a great many points.
+
+            in_parallel: boolean
+                Whether to use a parallel implementation or not to predict at
+                each location in X. If only predicting a single point or if
+                predicting with only one expert, this arg is ignored. For small
+                X, consider setting false.
 
         Returns:
-        ----------
-        y_mean : array, shape = (n_locations, n_features)
-            Mean of the predictive distribution at the query points.
+            y_mean : array, shape = (n_locations, n_features)
+                Mean of the predictive distribution at the query points.
 
-        y_var : array, shape = (n_locations, 1)
-            Variance of the predictive distribution at the query points.
-            Only returned if return_var is True.
+            y_var : array, shape = (n_locations, 1)
+                Variance of the predictive distribution at the query points.
+                Only returned if return_var is True.
         """
         X = check_array(X)
         if self.standardize_X:
@@ -202,7 +182,7 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
             predictions = np.zeros((X.shape[0], self.y.shape[1], num_experts))
             args_iter = []
 
-            if batch_size == -1:
+            if batch_size is None:
                 batch_size = X.shape[0] * 2
 
             if in_parallel:
@@ -214,10 +194,13 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
                 batch = X[batch_range, :]
 
                 # Generate iterable list of arguments to map out to procs
-                # TODO: Could probably be passing a lot less around between procs
+                # TODO: Could probably be passing a lot less around between
+                # processes
                 if len(args_iter) == 0:
                     for i in range(num_experts):
-                        args_iter.append([self.experts[i], batch, self.y.shape[1]])
+                        args_iter.append([self.experts[i],
+                                          batch,
+                                          self.y.shape[1]])
 
                 # We only change the batch arg each loop
                 if len(args_iter) != 0:
@@ -230,7 +213,9 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
                     chunkersize = 1
 
                 if in_parallel:
-                    results = pool.imap(_worker_predict_wrapper, args_iter, chunksize=chunkersize)
+                    results = pool.imap(_worker_predict_wrapper,
+                                        args_iter,
+                                        chunksize=chunkersize)
                 elif num_experts == 1:
                     predictions, sigma = _worker_predict_wrapper(args_iter[0])
                 else:
@@ -274,12 +259,11 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
 
         sample_sets = []
         indices = np.arange(self.num_samples)
+
         if self.locality:
             num_clusters = int(float(self.num_samples) / self.points_per_expert)
-
             birch = Birch(n_clusters=num_clusters, threshold=0.2)
             labels = birch.fit_predict(self.X)
-
             unique_labels = np.unique(labels)
 
             # Fill each inner list i with indices matching its label i
@@ -288,7 +272,7 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         else:
             np.random.shuffle(indices)
 
-            # Renaming just for short names
+            # Renaming just for shorter names
             cap = self.num_samples
             exp = self.points_per_expert
 
@@ -299,7 +283,8 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         return sample_sets
 
 
-def _worker_fit(kernel, sample_indices, X, y, n_restarts_optimizer, normalize_y):
+def _worker_fit(kernel, sample_indices, X, y,
+                n_restarts_optimizer, normalize_y):
     """This contains the parallel workload used in the fitting of the rbcm"""
     gpr = GPR(kernel, n_restarts_optimizer=n_restarts_optimizer,
               copy_X_train=False, normalize_y=normalize_y)
