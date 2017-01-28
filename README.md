@@ -35,19 +35,19 @@ requirements-dev.txt`
 
 ## Test
 
-After installing the dev tools, you can run the test suite with `pytest`.
+After installing the dev tools, you can run the test suite with `tox`.
 
 ## Documentation
 
-There exists some bits of documentation, but you have to build it yourself
-first with Sphinx for now.
+There exists some documentation, but you have to build it yourself first with
+Sphinx for now.
 
 You can do this in the `doc` directory with the `Makefile`. Use the command
-`make help` to see what formats are available. 
+`make help` there to see what formats are available.
 
 If you call `make html` there will be a file at the location
 `docs/build/html/index.html` produced which you can open with your browser to
-see the docs.
+see the full docs.
 
 ## How does it work?
 
@@ -77,10 +77,9 @@ This model offers two performance benefits:
 
 * The rBCM reduces the impact of the poor GPR scaling, because each expert only
   handles some subset of the total data.
-* The rBCM opens up parallelism during training - each expert can be trained
-  and predicted with independently and then simply weighted together. You could
-  efficiently colocate experts and their subsets of a very large dataset in a
-  distributed system.
+* The rBCM opens up parallelism during both training and fitting stages - each
+  expert can be trained and predicted with independently and then simply
+  weighted together.
 
 ## What are the problems with it?
 

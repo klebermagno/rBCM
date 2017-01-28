@@ -13,7 +13,8 @@ from sklearn.cluster import Birch
 from sklearn.gaussian_process.gpr import GaussianProcessRegressor as GPR
 from sklearn.utils.validation import check_X_y, check_array
 
-from weighting import differential_entropy_weighting
+from .weighting import differential_entropy_weighting
+from .logger import logger
 
 
 class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
@@ -86,6 +87,14 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         Returns:
             self : returns an instance of self.
         """
+        # Enforce our type and shape requirements on X and y
+        X = self._validate_input(X)
+        y = self._validate_input(y)
+
+        # Make sure they are consistent and sensical together, i.e. matching
+        # sizes, consistent data types, etc.
+        X, y = check_X_y(X, y, multi_output=True, y_numeric=True)
+
         if self.n_restarts_optimizer < 0:
             self.n_restarts_optimizer = 0
 
@@ -96,11 +105,11 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
             self.prior_std = 1
         else:
             self.prior_std = self.kernel(self.kernel.diag(np.arange(1)))[0]
+
         self.num_samples = X.shape[0]
 
-        X, y = check_X_y(X, y, multi_output=True, y_numeric=True)
-
-        # We normalize all the data as one, not individually
+        # We normalize all the data as one, not individually, and then save X
+        # and y on the model object
         if self.standardize_X:
             self.scaler = StandardScaler()
             self.X = self.scaler.fit_transform(X)
@@ -162,8 +171,10 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
                 Only returned if return_var is True.
         """
         X = check_array(X)
+
         if self.standardize_X:
             X = self.scaler.transform(X)
+
         num_experts = len(self.experts)
 
         if num_experts == 1:
@@ -242,9 +253,20 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         else:
             return preds
 
+    def _validate_input(self, array):
+        """
+        Validates the input for X or y at the fitting or prediction stages.
+        """
+        if type(array) is not np.ndarray:
+            raise ValueError("Cannot provide X, y inputs \
+that are not numpy.ndarrays objects.")
+
+        return np.atleast_2d(array)
+
     def _generate_partitioned_indices(self):
-        """Return a list of lists each containing a partition of the indices
-        of the data to be fit.
+        """
+        Return a list of lists each containing a partition of the indices of
+        the data to be fit.
         """
         # Degenerate to full GPR for data with small n
         _MIN_POINTS_FOR_RBCM = 2048
