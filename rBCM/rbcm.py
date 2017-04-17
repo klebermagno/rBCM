@@ -14,7 +14,6 @@ from sklearn.gaussian_process.gpr import GaussianProcessRegressor as GPR
 from sklearn.utils.validation import check_X_y, check_array
 
 from .weighting import differential_entropy_weighting
-from .logger import logger
 
 
 class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
@@ -243,13 +242,21 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
                 pool.close()
 
         if num_experts != 1:
-            preds, var = differential_entropy_weighting(predictions, sigma, self.prior_std)
+            preds, var = differential_entropy_weighting(predictions, sigma,
+                                                        self.prior_std)
         else:
-            preds = predictions.ravel()
-            var = np.power(sigma, 2).ravel()
+            preds = predictions
+            var = np.power(sigma, 2)
+
+        # This changing of dimensions may be wrong? preds was coming out as
+        # (100,) shape sometimes, but we want (100, 1).
+        if len(preds.shape) == 1:
+            preds = preds[:, np.newaxis]
+        if len(var.shape) == 1:
+            var = var[:, np.newaxis]
 
         if return_var:
-            return preds, var
+            return predictions, var
         else:
             return preds
 
@@ -271,7 +278,8 @@ that are not numpy.ndarrays objects.")
         # Degenerate to full GPR for data with small n
         _MIN_POINTS_FOR_RBCM = 2048
         # If not degenerate, but passed no ppe
-        _DEFAULT_POINTS_PER_EXPERT = int(float(self.num_samples) / mp.cpu_count())
+        _DEFAULT_POINTS_PER_EXPERT = int(
+                float(self.num_samples) / mp.cpu_count())
 
         if self.points_per_expert is None:
             if self.num_samples >= _MIN_POINTS_FOR_RBCM:
@@ -283,7 +291,8 @@ that are not numpy.ndarrays objects.")
         indices = np.arange(self.num_samples)
 
         if self.locality:
-            num_clusters = int(float(self.num_samples) / self.points_per_expert)
+            num_clusters = int(
+                    float(self.num_samples) / self.points_per_expert)
             birch = Birch(n_clusters=num_clusters, threshold=0.2)
             labels = birch.fit_predict(self.X)
             unique_labels = np.unique(labels)

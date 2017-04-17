@@ -11,3 +11,4 @@ venv
 .tox
 tests/.coverage
 tests/visuals/
+docs/_build

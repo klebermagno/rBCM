@@ -1,8 +1,6 @@
-"""Weighting and combination of sets of predictions into a single prediction."""
+"Weighting and combination of sets of predictions into a single prediction."
 
 # Authors: Lucas Jere Kolstad <lucaskolstad@gmail.com>
-#
-# License: see LICENSE file
 
 import numpy as np
 
