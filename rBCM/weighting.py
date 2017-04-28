@@ -1,7 +1,5 @@
 "Weighting and combination of sets of predictions into a single prediction."
 
-# Authors: Lucas Jere Kolstad <lucaskolstad@gmail.com>
-
 import numpy as np
 
 
@@ -32,6 +30,9 @@ def differential_entropy_weighting(predictions, sigma, prior_std):
         rbcm_var : array, shape = (n_locations, )
             Variance of predictive distribution at query points
     """
+    # We sometimes can be given zeros here and cannot deal with it, so set any
+    # zeros to a very small number.
+    sigma[sigma == 0] = 1E-9
     var = np.power(sigma, 2)
     log_var = np.log(var)
     prior_var = np.power(prior_std, 2)
@@ -41,13 +42,13 @@ def differential_entropy_weighting(predictions, sigma, prior_std):
     beta = 0.5 * (log_prior_var[:, np.newaxis] - log_var[:, :])
 
     # Combine the experts according to their beta weight
-    print(predictions[0, :, :])
+    # print(predictions[0, :, :])
     preds_old, var_old = _combine_old(predictions, var, beta, prior_var)
-    print(preds_old[0, :])
-    preds, var = _combine(predictions, var, beta, prior_var)
-    np.allclose(preds_old, preds)
-    np.allclose(var_old, var)
-    return preds, var
+    # print(preds_old[0, :])
+    # preds, var = _combine(predictions, var, beta, prior_var)
+    # np.allclose(preds_old, preds)
+    # np.allclose(var_old, var)
+    return preds_old, var_old
 
 
 def _combine(predictions, var, beta, prior_var):
@@ -88,6 +89,11 @@ def _combine_old(predictions, var, beta, prior_var):
 
     This should be able to accept any general measure of uncertainty, beta.
 
+    This is the OLD version of this function which is based on naive loops, but
+    is easier to understand logically and check for correctness. This (hopeful)
+    correctness is used to verify correctness of the new version which utilizes
+    numpy's einsum() function for performance.
+
     Args:
         predictions : array-like, shape = (n_locations, n_features, n_experts)
             Values predicted by some sklearn predictor that offers var as well
@@ -112,9 +118,10 @@ def _combine_old(predictions, var, beta, prior_var):
         beta_sums[j] = np.sum(beta[j, :])
         right_term[j] = inv_prior_var * (1 - beta_sums[j])
     rbcm_inv_var = left_term + right_term
+
+    # Computer Eq. 21
     rbcm_var = 1 / rbcm_inv_var
     rbcm_var = rbcm_var
-
     preds = np.zeros((predictions.shape[0], predictions.shape[1]))
     for i in range(predictions.shape[0]):
         for j in range(predictions.shape[1]):

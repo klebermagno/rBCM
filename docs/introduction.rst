@@ -5,6 +5,14 @@ This package implement a robust Bayesian Committee Machine as described in
 `this paper <https://arxiv.org/abs/1502.02843>`_ from the proceedings of ICML
 2015.
 
+WARNINGS
+--------
+
+**Alpha software! Definitely still broken and working on it.**
+
+Description
+-----------
+
 From the abstract of that paper:
 
     "A robust Bayesian Committee Machine (rBCM) is a scalable product-of-experts

@@ -1,9 +1,5 @@
 """Robust Bayesian Committee Machine Regression"""
 
-# Authors: Lucas Jere Kolstad <lucaskolstad@gmail.com>
-#
-# License: See LICENSE file
-
 import multiprocessing as mp
 import numpy as np
 
@@ -71,6 +67,10 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         self.n_restarts_optimizer = n_restarts_optimizer
         self.normalize_y = normalize_y
         self.standardize_X = standardize_X
+
+        # Degenerate to full GPR for data with small n.
+        # Change this before fitting to configure.
+        self.min_points_for_committee = 2048
 
     def fit(self, X, y):
         """Fits X to y with a robust Bayesian Committee Machine model.
@@ -176,70 +176,20 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
 
         num_experts = len(self.experts)
 
+        # we can't multiprocess without more than one expert anyways.
         if num_experts == 1:
             in_parallel = False
 
-        # Bypass all the slow stuff if we are just making a point prediction
+        # Bypass all the slow stuff if we are just making a point prediction.
+        # Forking processes for such small amounts of work may not be worth it,
+        # this choice of condition when to do this is pretty arbitrary though.
         if X.shape[0] == 1:
-            predictions = np.empty((1, self.y.shape[1], num_experts))
-            sigma = np.empty((1, num_experts))
-            for i in range(num_experts):
-                predictions[:, :, i], sigma[:, i] = self.experts[i].predict(X)
+            predictions, sigma = self._simple_predict(X)
 
         # If not making point prediction we do all the large scale work though
         else:
-            sigma = np.zeros((X.shape[0], num_experts))
-            predictions = np.zeros((X.shape[0], self.y.shape[1], num_experts))
-            args_iter = []
-
-            if batch_size is None:
-                batch_size = X.shape[0] * 2
-
-            if in_parallel:
-                pool = mp.Pool()
-
-            # Batch the data and predict
-            for i in range(0, X.shape[0], batch_size):
-                batch_range = range(i, min(i + batch_size, X.shape[0]))
-                batch = X[batch_range, :]
-
-                # Generate iterable list of arguments to map out to procs
-                # TODO: Could probably be passing a lot less around between
-                # processes
-                if len(args_iter) == 0:
-                    for i in range(num_experts):
-                        args_iter.append([self.experts[i],
-                                          batch,
-                                          self.y.shape[1]])
-
-                # We only change the batch arg each loop
-                if len(args_iter) != 0:
-                    for j in range(num_experts):
-                        args_iter[j][1] = batch
-
-                # Using a simple chunk size policy for now
-                chunkersize = int(np.rint(float(num_experts) / mp.cpu_count()))
-                if chunkersize <= 0:
-                    chunkersize = 1
-
-                if in_parallel:
-                    results = pool.imap(_worker_predict_wrapper,
-                                        args_iter,
-                                        chunksize=chunkersize)
-                elif num_experts == 1:
-                    predictions, sigma = _worker_predict_wrapper(args_iter[0])
-                else:
-                    results = map(_worker_predict_wrapper, args_iter)
-
-                # Fill the preallocated arrays with the results as they come in
-                for j in range(num_experts):
-                    if in_parallel:
-                        predictions[batch_range, :, j], sigma[batch_range, j] = results.next()
-                    elif num_experts != 1:
-                        predictions[batch_range, :, j], sigma[batch_range, j] = results[j]
-
-            if in_parallel:
-                pool.close()
+            predictions, sigma = self._batchable_forkable_predict(
+                    X, batch_size, in_parallel)
 
         if num_experts != 1:
             preds, var = differential_entropy_weighting(predictions, sigma,
@@ -260,6 +210,81 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         else:
             return preds
 
+    def _batchable_forkable_predict(self, X, batch_size, in_parallel):
+        """
+        Do the prediction possibly in parallel and with batched points.
+        """
+        num_experts = len(self.experts)
+
+        sigma = np.zeros((X.shape[0], num_experts))
+        predictions = np.zeros((X.shape[0], self.y.shape[1], num_experts))
+        args_iter = []
+
+        if batch_size is None:
+            batch_size = X.shape[0] * 2
+
+        if in_parallel:
+            pool = mp.Pool()
+
+        # Batch the data and predict
+        for i in range(0, X.shape[0], batch_size):
+            batch_range = range(i, min(i + batch_size, X.shape[0]))
+            batch = X[batch_range, :]
+
+            # Generate iterable list of arguments to map out to procs
+            # TODO: Could probably be passing a lot less around between
+            # processes
+            if len(args_iter) == 0:
+                for i in range(num_experts):
+                    args_iter.append([self.experts[i],
+                                      batch,
+                                      self.y.shape[1]])
+
+            # We only change the batch arg each loop
+            if len(args_iter) != 0:
+                for j in range(num_experts):
+                    args_iter[j][1] = batch
+
+            # Using a simple chunk size policy for now
+            chunkersize = int(np.rint(float(num_experts) / mp.cpu_count()))
+            if chunkersize <= 0:
+                chunkersize = 1
+
+            if in_parallel:
+                results = pool.imap(_worker_predict_wrapper,
+                                    args_iter,
+                                    chunksize=chunkersize)
+            elif num_experts == 1:
+                predictions, sigma = _worker_predict_wrapper(args_iter[0])
+            else:
+                results = map(_worker_predict_wrapper, args_iter)
+
+            # Fill the preallocated arrays with the results as they come in
+            for j in range(num_experts):
+                if in_parallel:
+                    predictions[batch_range, :, j], sigma[batch_range, j] = results.next()
+                elif num_experts != 1:
+                    predictions[batch_range, :, j], sigma[batch_range, j] = results[j]
+
+        if in_parallel:
+            pool.close()
+
+        return predictions, sigma
+
+    def _simple_predict(self, X):
+        """
+        Do the prediction without forking processes at all. Which may be useful
+        for low volume predictions like point predictions that can be faster
+        without bothering to multiprocess.
+        """
+        num_experts = len(self.experts)
+
+        predictions = np.empty((1, self.y.shape[1], num_experts))
+        sigma = np.empty((1, num_experts))
+        for i in range(num_experts):
+            predictions[:, :, i], sigma[:, i] = self.experts[i].predict(X)
+        return predictions, sigma
+
     def _validate_input(self, array):
         """
         Validates the input for X or y at the fitting or prediction stages.
@@ -275,14 +300,12 @@ that are not numpy.ndarrays objects.")
         Return a list of lists each containing a partition of the indices of
         the data to be fit.
         """
-        # Degenerate to full GPR for data with small n
-        _MIN_POINTS_FOR_RBCM = 2048
         # If not degenerate, but passed no ppe
         _DEFAULT_POINTS_PER_EXPERT = int(
                 float(self.num_samples) / mp.cpu_count())
 
         if self.points_per_expert is None:
-            if self.num_samples >= _MIN_POINTS_FOR_RBCM:
+            if self.num_samples >= self.min_points_for_committee:
                 self.points_per_expert = _DEFAULT_POINTS_PER_EXPERT
             else:
                 self.points_per_expert = self.num_samples
@@ -303,14 +326,13 @@ that are not numpy.ndarrays objects.")
         else:
             np.random.shuffle(indices)
 
-            # Renaming just for shorter names
             cap = self.num_samples
-            exp = self.points_per_expert
+            ppe = self.points_per_expert
 
-            for i in range(0, cap, exp):
-                if (i + exp) >= cap:
-                    exp = cap - i
-                sample_sets.append(indices[i:i + exp])
+            for i in range(0, cap, ppe):
+                if (i + ppe) >= cap:
+                    ppe = cap - i
+                sample_sets.append(indices[i:i + ppe])
         return sample_sets
 
 
@@ -323,11 +345,6 @@ def _worker_fit(kernel, sample_indices, X, y,
     return gpr
 
 
-def _worker_fit_wrapper(args):
-    """Just used to unpack arguments for parallel call to worker_fit"""
-    return _worker_fit(*args)
-
-
 def _worker_predict(expert, X, y_num_columns):
     """Parallel workload for predicting a single expert"""
     predictions = np.zeros((X.shape[0], y_num_columns))
@@ -336,6 +353,6 @@ def _worker_predict(expert, X, y_num_columns):
     return predictions, sigma
 
 
-def _worker_predict_wrapper(args):
-    """Just used to unpack arguments for parallel call to worker_predict"""
-    return _worker_predict(*args)
+# These simply unpack arguments for the fitting and prediction worker function.
+_worker_fit_wrapper = lambda args: _worker_fit(*args)
+_worker_predict_wrapper = lambda args: _worker_predict(*args)
