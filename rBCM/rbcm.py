@@ -354,5 +354,9 @@ def _worker_predict(expert, X, y_num_columns):
 
 
 # These simply unpack arguments for the fitting and prediction worker function.
-_worker_fit_wrapper = lambda args: _worker_fit(*args)
-_worker_predict_wrapper = lambda args: _worker_predict(*args)
+def _worker_fit_wrapper(args):
+    return _worker_fit(*args)
+
+
+def _worker_predict_wrapper(args):
+    return _worker_predict(*args)
