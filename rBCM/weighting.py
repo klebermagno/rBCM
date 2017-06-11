@@ -108,29 +108,33 @@ def _combine_old(predictions, var, beta, prior_var):
     """
     inv_var = 1 / var
     inv_prior_var = 1 / prior_var
+    num_locations = predictions.shape[0]
+    num_features = predictions.shape[1]
+    num_experts = predictions.shape[2]
 
     # Compute Eq. 22
-    beta_sums = np.zeros(predictions.shape[0])
-    left_term = np.zeros(predictions.shape[0])
-    right_term = np.zeros(predictions.shape[0])
-    for j in range(predictions.shape[0]):
-        left_term[j] = np.dot(beta[j, :], inv_var[j, :])
-        beta_sums[j] = np.sum(beta[j, :])
-        right_term[j] = inv_prior_var * (1 - beta_sums[j])
+    left_term = np.zeros(num_locations)
+    right_term = np.zeros(num_locations)
+    
+    for loc in range(num_locations):
+        left_term[loc] = np.dot(beta[loc, :], inv_var[loc, :])
+        right_term[loc] = inv_prior_var * (1 - np.sum(beta[loc, :]) )
+        
     rbcm_inv_var = left_term + right_term
 
     # Computer Eq. 21
     rbcm_var = 1 / rbcm_inv_var
     rbcm_var = rbcm_var
-    preds = np.zeros((predictions.shape[0], predictions.shape[1]))
-    for i in range(predictions.shape[0]):
-        for j in range(predictions.shape[1]):
+    preds = np.zeros((num_locations, num_features))
+    
+    for loc in range(num_locations):
+        for feat in range(num_features):
             summation = 0
-            for k in range(predictions.shape[2]):
-                summation += beta[i, k] * inv_var[i, k] * predictions[i, j, k]
-            preds[i, j] = summation
+            for exp in range(num_experts):
+                summation += beta[loc, exp] * inv_var[loc, exp] * predictions[loc, feat, exp]
+            preds[loc, feat] = summation
 
-    for i in range(preds.shape[0]):
-        preds[i, :] = rbcm_var[i] * preds[i, :]
+    for loc in range(preds.shape[0]):
+        preds[loc, :] = rbcm_var[loc] * preds[loc, :]
 
     return preds, rbcm_var
