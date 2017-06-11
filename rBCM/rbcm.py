@@ -75,7 +75,7 @@ class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
         # Sensible default kernel for locality=True 
         # The Matern(Length_scale=1.0, nu=3/2)
         if (self.locality=True and self.kernel=None):
-            self.kernel = (Matern(Length_scale=1.0, nu=3/2) + WhiteKernel(1E-10))
+            self.kernel = (Matern(length_scale=1.0, nu=3/2) + WhiteKernel(1E-10))
 
     def fit(self, X, y):
         """Fits X to y with a robust Bayesian Committee Machine model.
