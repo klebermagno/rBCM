@@ -42,49 +42,11 @@ def differential_entropy_weighting(predictions, sigma, prior_std):
     beta = 0.5 * (log_prior_var[:, np.newaxis] - log_var[:, :])
 
     # Combine the experts according to their beta weight
-    # print(predictions[0, :, :])
-    preds_old, var_old = _combine_old(predictions, var, beta, prior_var)
-    # print(preds_old[0, :])
-    # preds, var = _combine(predictions, var, beta, prior_var)
-    # np.allclose(preds_old, preds)
-    # np.allclose(var_old, var)
+    preds_old, var_old = _combine(predictions, var, beta, prior_var)
     return preds_old, var_old
 
 
 def _combine(predictions, var, beta, prior_var):
-    """Calculate a single prediction from many with the given beta weights.
-
-    This should be able to accept any general measure of uncertainty, beta.
-
-    Args:
-        predictions : array-like, shape = (n_locations, n_features, n_experts)
-            Values predicted by some sklearn predictor that offers var as well
-
-        var : array-like, shape = (n_locations, n_experts)
-            Variances corresponding to the predictions
-
-    Returns:
-        predictions : array, shape = (n_locations, n_features)
-
-        rbcm_var : array, shape = (n_locations)
-    """
-    inv_var = 1 / var
-    inv_prior_var = 1 / prior_var
-
-    # Compute Eq. 22
-    left_term = np.einsum("ij, ij->i", beta, inv_var)
-    right_term = inv_prior_var * (1 - np.einsum("ij->i", beta))
-    rbcm_inv_var = left_term + right_term
-
-    # Compute Eq. 21
-    rbcm_var = 1 / rbcm_inv_var
-    preds = np.einsum("ik, ik, ijk->ij", beta, inv_var, predictions)
-    preds = rbcm_var[:, np.newaxis] * preds[:, :]
-
-    return preds, rbcm_var
-
-
-def _combine_old(predictions, var, beta, prior_var):
     """Calculate a single prediction from many with the given beta weights.
 
     This should be able to accept any general measure of uncertainty, beta.
@@ -118,7 +80,7 @@ def _combine_old(predictions, var, beta, prior_var):
 
     for loc in range(num_locations):
         left_term[loc] = np.dot(beta[loc, :], inv_var[loc, :])
-        right_term[loc] = inv_prior_var * (1 - np.sum(beta[loc, :]) )
+        right_term[loc] = inv_prior_var * (1 - np.sum(beta[loc, :]))
 
     rbcm_inv_var = left_term + right_term
 
