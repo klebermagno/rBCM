@@ -5,11 +5,11 @@ import numpy as np
 
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import Birch
-from sklearn.gaussian_process.gpr import GaussianProcessRegressor as GPR
 from sklearn.utils.validation import check_X_y, check_array
 
-from .weighting import differential_entropy_weighting
+from rBCM.weighting.differential_entropy import differential_entropy_weighting
+from rBCM.partitioning import random_partitioning, birch_cluster_partitioning
+from rBCM.gpr import predict as gpr_predict, fit as gpr_fit
 
 
 class RobustBayesianCommitteeMachineRegressor(BaseEstimator, RegressorMixin):
@@ -310,53 +310,16 @@ that are not numpy.ndarrays objects.")
             else:
                 self.points_per_expert = self.num_samples
 
-        sample_sets = []
-        indices = np.arange(self.num_samples)
-
         if self.locality:
-            num_clusters = int(
-                    float(self.num_samples) / self.points_per_expert)
-            birch = Birch(n_clusters=num_clusters, threshold=0.2)
-            labels = birch.fit_predict(self.X)
-            unique_labels = np.unique(labels)
-
-            # Fill each inner list i with indices matching its label i
-            for label in unique_labels:
-                sample_sets.append([i for i in indices if labels[i] == label])
+            return birch_cluster_partitioning(self.X, self.points_per_expert)
         else:
-            np.random.shuffle(indices)
-
-            cap = self.num_samples
-            ppe = self.points_per_expert
-
-            for i in range(0, cap, ppe):
-                if (i + ppe) >= cap:
-                    ppe = cap - i
-                sample_sets.append(indices[i:i + ppe])
-        return sample_sets
-
-
-def _worker_fit(kernel, sample_indices, X, y,
-                n_restarts_optimizer, normalize_y):
-    """This contains the parallel workload used in the fitting of the rbcm"""
-    gpr = GPR(kernel, n_restarts_optimizer=n_restarts_optimizer,
-              copy_X_train=False, normalize_y=normalize_y)
-    gpr.fit(X[sample_indices, :], y[sample_indices, :])
-    return gpr
-
-
-def _worker_predict(expert, X, y_num_columns):
-    """Parallel workload for predicting a single expert"""
-    predictions = np.zeros((X.shape[0], y_num_columns))
-    sigma = np.zeros((X.shape[0], 1))
-    predictions, sigma = expert.predict(X, return_std=True)
-    return predictions, sigma
+            return random_partitioning(self.X, self.points_per_expert)
 
 
 # These simply unpack arguments for the fitting and prediction worker function.
 def _worker_fit_wrapper(args):
-    return _worker_fit(*args)
+    return gpr_fit(*args)
 
 
 def _worker_predict_wrapper(args):
-    return _worker_predict(*args)
+    return gpr_predict(*args)

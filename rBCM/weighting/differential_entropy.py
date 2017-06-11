@@ -115,18 +115,18 @@ def _combine_old(predictions, var, beta, prior_var):
     # Compute Eq. 22
     left_term = np.zeros(num_locations)
     right_term = np.zeros(num_locations)
-    
+
     for loc in range(num_locations):
         left_term[loc] = np.dot(beta[loc, :], inv_var[loc, :])
         right_term[loc] = inv_prior_var * (1 - np.sum(beta[loc, :]) )
-        
+
     rbcm_inv_var = left_term + right_term
 
     # Computer Eq. 21
     rbcm_var = 1 / rbcm_inv_var
     rbcm_var = rbcm_var
     preds = np.zeros((num_locations, num_features))
-    
+
     for loc in range(num_locations):
         for feat in range(num_features):
             summation = 0

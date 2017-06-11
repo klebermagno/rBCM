@@ -26,7 +26,7 @@ def setup_package():
         license="MIT",
         packages=find_packages(),
         install_requires=get_install_reqs(),
-        keywords="statistics gaussian process bayesian regression",
+        keywords="statistics gaussian process bayesian regression committee",
         long_description=get_long_description(),
         classifiers=[
             "Development Status :: 3 - Alpha",
